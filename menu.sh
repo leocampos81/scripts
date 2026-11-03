@@ -26,14 +26,14 @@ menu() {
                 echo "[-] Verificando el estado del repositorio en ~/.local/bin/scripts..."
                 cd ~/.local/bin/scripts || exit 1
                 
-                # 1. Asegurar uso de SSH en lugar de HTTPS para autenticación sin contraseña
+                # 1. Asegurar uso de SSH
                 local current_remote=$(git remote get-url origin 2>/dev/null)
                 if [[ "$current_remote" =~ "^https://github.com/" ]]; then
                     echo "[!] Cambiando el remoto de HTTPS a SSH..."
                     git remote set-url origin git@github.com:leocampos81/scripts.git
                 fi
 
-                # 2. Verificar y configurar user.name con soporte real de Backspace
+                # 2. Configurar usuario/correo si no existen
                 if [[ -z "$(git config user.name)" ]]; then
                     echo "[!] No se encontró un user.name configurado en Git."
                     local git_name=""
@@ -41,7 +41,6 @@ menu() {
                     git config user.name "$git_name"
                 fi
                 
-                # 3. Verificar y configurar user.email con soporte real de Backspace
                 if [[ -z "$(git config user.email)" ]]; then
                     echo "[!] No se encontró un user.email configurado en Git."
                     local git_email=""
@@ -49,18 +48,18 @@ menu() {
                     git config user.email "$git_email"
                 fi
                 
-                # 4. Intentar traer cambios remotos de GitHub
+                # 3. Traer cambios de GitHub (git pull)
                 echo "[-] Ejecutando git pull..."
                 git pull
                 
-                # 5. Verificar si hay cambios locales sin subir
+                # 4. Si hay archivos modificados/nuevos sin commit, hacer el commit
                 if [[ -n $(git status --porcelain) ]]; then
                     echo ""
-                    echo "[!] Se detectaron cambios locales pendientes de subir:"
+                    echo "[!] Se detectaron cambios locales no confirmados:"
                     git status -s
                     echo ""
                     
-                    read "resp?¿Deseas empaquetar y subir estos cambios a GitHub (git add, commit, push)? (s/n): "
+                    read "resp?¿Deseas empaquetar estos cambios (git add & commit)? (s/n): "
                     if [[ "$resp" == "s" || "$resp" == "S" ]]; then
                         local commit_msg=""
                         vared -p "Introduce el mensaje para el commit (o presiona Enter para mensaje por defecto): " commit_msg
@@ -74,18 +73,24 @@ menu() {
                         
                         echo "[-] Ejecutando git commit..."
                         git commit -m "$commit_msg"
-                        
-                        echo "[-] Ejecutando git push..."
-                        if git push; then
-                            echo "[OK] ¡Cambios subidos exitosamente a GitHub!"
-                        else
-                            echo "[ERROR] Falló el git push. Revisa tu conexión o tus llaves SSH en ~/.ssh/"
-                        fi
+                    fi
+                fi
+
+                # 5. Comprobar si la rama local está por delante de origin/main (commits pendientes por push)
+                git fetch origin > /dev/null 2>&1
+                local ahead_count=$(git rev-list --count origin/main..HEAD 2>/dev/null)
+
+                if [[ "$ahead_count" -gt 0 ]]; then
+                    echo ""
+                    echo "[!] Tienes $ahead_count commit(s) local(es) listo(s) para subir a GitHub."
+                    echo "[-] Ejecutando git push..."
+                    if git push; then
+                        echo "[OK] ¡Sincronización completada exitosamente con GitHub!"
                     else
-                        echo "[i] Omitiendo el envío de cambios locales."
+                        echo "[ERROR] Falló el git push. Revisa tu conexión o tus llaves SSH."
                     fi
                 else
-                    echo "[OK] El árbol de trabajo local está limpio. No hay cambios pendientes por subir."
+                    echo "[OK] El repositorio está 100% al día con GitHub (no hay commits pendientes de subir)."
                 fi
                 break
                 ;;
