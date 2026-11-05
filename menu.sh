@@ -336,7 +336,7 @@ menu() {
                     esac
                 done
                 ;;
-	6)
+            6)
                 while true; do
                     clear
                     echo "=========================================="
@@ -430,7 +430,7 @@ menu() {
                     esac
                 done
                 ;;
-	7|[qQ])
+            7|[qQ])
                 echo "¡Hasta luego, Leonardo! Cerrando dashboard."
                 break
                 ;;
