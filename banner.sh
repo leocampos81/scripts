@@ -1,13 +1,7 @@
 #!/bin/bash
 
 ######################################################################
-# 🌞 Welcome Banner                                                  #
-######################################################################
-# Prints personal greeting, system info and data about today         #
-# Intended for use as a MOTD, for when using multiple systems        #
-# For docs and more info, see: https://github.com/lissy93/dotfiles   #
-#                                                                    #
-# Licensed under MIT (C) Alicia Sykes 2022 <https://aliciasykes.com> #
+# 🌞 Welcome Banner & Dashboard Header                               #
 ######################################################################
 
 # Formatting variables
@@ -15,29 +9,14 @@ COLOR_P='\033[1;36m'
 COLOR_S='\033[0;36m'
 RESET='\033[0m'
 
-# Print time-based personalized message, using figlet & lolcat if availible
+# Print clean header with PROMETHERION2112
 function welcome_greeting () {
-  h=$(date +%H)
-  h=$((10#$h))
-  if [ $h -lt 4 ] || [ $h -gt 22 ];
-    then greeting="Good Night"
-  elif [ $h -lt 12 ];
-    then greeting="Good morning"
-  elif [ $h -lt 18 ];
-    then greeting="Good afternoon"
-  elif [ $h -lt 22 ];
-    then greeting="Good evening"
-  else
-    greeting="Hello"
-  fi
-  WELCOME_MSG="$greeting $USER!"
-  if hash lolcat 2>/dev/null && hash figlet 2>/dev/null; then
-    echo "${WELCOME_MSG}" | figlet | lolcat
-  else
-    echo -e "$COLOR_P${WELCOME_MSG}${RESET}\n"
-  fi
+  echo -e "$COLOR_P"
+  echo " =================================================================="
+  echo "   PROMETHERION2112 | SYSADMIN DASHBOARD"
+  echo " =================================================================="
+  echo -e "$RESET"
 }
-
 
 # Print system information with neofetch, if it's installed
 function welcome_sysinfo () {
@@ -84,9 +63,9 @@ function welcome() {
 }
 
 # Determine if file is being run directly or sourced
-([[ -n $ZSH_EVAL_CONTEXT && $ZSH_EVAL_CONTEXT =~ :file$ ]] || 
+([[ -n $ZSH_EVAL_CONTEXT && $ZSH_EVAL_CONTEXT =~ :file$ ]] ||  
   [[ -n $KSH_VERSION && $(cd "$(dirname -- "$0")" &&
-    printf '%s' "${PWD%/}/")$(basename -- "$0") != "${.sh.file}" ]] || 
+    printf '%s' "${PWD%/}/")$(basename -- "$0") != "${.sh.file}" ]] ||  
   [[ -n $BASH_VERSION ]] && (return 0 2>/dev/null)) && sourced=1 || sourced=0
 
 # If script being called directly run immediately
