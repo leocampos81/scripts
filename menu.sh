@@ -1,17 +1,15 @@
 #!/usr/bin/env zsh
 
 # ==============================================================================
-#  LEONARDO CAMPOS - SYSADMIN TOOLKIT & DASHBOARD
+#  PROMETHERION2112 - SYSADMIN TOOLKIT & DASHBOARD
 #  Repositorio: git@github.com:leocampos81/scripts.git
 # ==============================================================================
 
-# Función para registrar logs de auditoría
 log_action() {
     local log_file="$HOME/.local/bin/scripts/sysadmin.log"
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> "$log_file"
 }
 
-# Función para detectar el sistema operativo actual
 get_os_info() {
     if [[ -f /etc/os-release ]]; then
         . /etc/os-release
@@ -24,402 +22,197 @@ get_os_info() {
 menu() {
     while true; do
         clear
-
-	# Encabezado personalizado para PROMETHERION2112
-	echo "╔══════════════════════════════════════════════════════════════════╗"
-	echo "║                                                                  ║"
-	echo "║                  P R O M E T H E R I O N  2 1 1 2                ║"
-	echo "║                 S Y S A D M I N   D A S H B O A R D              ║"
-	echo "║                                                                  ║"
-	echo "╚══════════════════════════════════════════════════════════════════╝"
-	echo "=================================================================="
-        echo "             PROMETHERION2112 | SYSADMIN DASHBOARD"
-        echo "=================================================================="
-	local sistema_actual=$(get_os_info)
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        echo "║                                                                  ║"
+        echo "║                  P R O M E T H E R I O N  2 1 1 2                  ║"
+        echo "║                 S Y S A D M I N   D A S H B O A R D              ║"
+        echo "║                                                                  ║"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        local sistema_actual=$(get_os_info)
         echo "[*] Usuario Activo : $USER@$(hostname)"
         echo "[*] Servidor actual: $sistema_actual"
         echo "=========================================================="
-        echo "1) dnsglobe (Buscador y explorador de DNS)"
-        echo "2) fzf (Buscador difuso para terminal)"
-        echo "3) Monitoreo de recursos (btop, htop o top)"
-        echo "4) Diagnóstico de disco y espacio (df, ncdu)"
-        echo "5) Diagnóstico rápido de red e interfaces"
-        echo "6) Servicios y Contenedores Docker"
-        echo "7) Actualizar el sistema y limpiar paquetes"
-        echo "8) Actualizar / Sincronizar Repositorio (GitHub)"
-        echo "9) Salir (o presiona 'q')"
+        echo "1) Herramientas de sistema externas (dnsglobe, fzf, etc.)"
+        echo "2) Monitoreo de recursos locales y disco (btop, df, ncdu)"
+        echo "3) Servicios y Contenedores Docker"
+        echo "4) Mantenimiento de Sistema y Sincronización Git"
+        echo "5) Utilidades Varias (Clima wttr.in, etc.)"
+        echo "6) Salir (o presiona 'q')"
         echo "=========================================================="
         
-        echo -n "LEO-DASHBOARD > Elige una opción [1-9 o q]: "
+        echo -n "LEO-DASHBOARD > Elige una opción [1-6 o q]: "
         read -r opt
 
         case $opt in
             1)
-                echo ""
-                echo "[-] Verificando el estado de dnsglobe..."
-                if command -v dnsglobe &> /dev/null; then
-                    echo "[OK] dnsglobe ya está instalado y operativo."
-                    log_action "Verificación: dnsglobe ya estaba instalado."
-                else
-                    echo "[!] dnsglobe no encontrado. Instalando..."
-                    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/514-labs/dnsglobe/releases/download/v0.3.0/dnsglobe-installer.sh | sh
-                    echo "[OK] Instalación de dnsglobe finalizada."
-                    log_action "Instalación completada: dnsglobe vía curl."
-                fi
-                echo ""
-                echo -n "Presiona Enter para volver al menú..."
-                read -r
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "   HERRAMIENTAS DE SISTEMA EXTERNAS"
+                    echo "=========================================="
+                    echo "1) dnsglobe (Buscador y explorador de DNS)"
+                    echo "2) fzf (Buscador difuso para terminal)"
+                    echo "3) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-3]: "
+                    read -r sub_opt
+                    case $sub_opt in
+                        1)
+                            echo ""
+                            echo "[-] Verificando el estado de dnsglobe..."
+                            if command -v dnsglobe &> /dev/null; then
+                                echo "[OK] dnsglobe ya está instalado y operativo."
+                                log_action "Verificación: dnsglobe ya estaba instalado."
+                            else
+                                echo "[!] dnsglobe no encontrado. Instalando..."
+                                curl --proto '=https' --tlsv1.2 -LsSf https://github.com/514-labs/dnsglobe/releases/download/v0.3.0/dnsglobe-installer.sh | sh
+                                echo "[OK] Instalación de dnsglobe finalizada."
+                                log_action "Instalación completada: dnsglobe vía curl."
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2)
+                            echo ""
+                            echo "[-] Verificando el estado de fzf en ($(get_os_info))..."
+                            if command -v fzf &> /dev/null; then
+                                echo "[OK] fzf ya está instalado y operativo."
+                                log_action "Verificación: fzf ya estaba instalado."
+                            else
+                                echo "[!] fzf no encontrado. Instalando..."
+                                if command -v apt &> /dev/null; then
+                                    sudo apt update && sudo apt install -y fzf
+                                elif command -v dnf &> /dev/null; then
+                                    sudo dnf install -y fzf
+                                fi
+                                log_action "Instalación completada: fzf."
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        3) break ;;
+                    esac
+                done
                 ;;
             2)
-                echo ""
-                echo "[-] Verificando el estado de fzf en ($(get_os_info))..."
-                if command -v fzf &> /dev/null; then
-                    echo "[OK] fzf ya está instalado y operativo."
-                    log_action "Verificación: fzf ya estaba instalado."
-                else
-                    echo "[!] fzf no encontrado. Detectando gestor..."
-                    if command -v apt &> /dev/null; then
-                        sudo apt update && sudo apt install -y fzf
-                        log_action "Instalación completada: fzf vía apt."
-                    elif command -v dnf &> /dev/null; then
-                        sudo dnf install -y fzf
-                        log_action "Instalación completada: fzf vía dnf."
-                    fi
-                    echo "[OK] Proceso de fzf finalizado."
-                fi
-                echo ""
-                echo -n "Presiona Enter para volver al menú..."
-                read -r
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "   MONITOREO DE RECURSOS LOCALES Y DISCO"
+                    echo "=========================================="
+                    echo "1) Monitores de procesos (btop / htop / top)"
+                    echo "2) Diagnóstico de disco y espacio (df)"
+                    echo "3) Explorador interactivo de carpetas pesadas (ncdu)"
+                    echo "4) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-4]: "
+                    read -r sub_opt
+                    case $sub_opt in
+                        1)
+                            echo ""
+                            echo "1) btop (Monitor moderno)"
+                            echo "2) htop (Monitor por procesos)"
+                            echo "3) top (Monitor básico nativo)"
+                            echo -n "Selecciona monitor [1-3]: "
+                            read -r m_opt
+                            case $m_opt in
+                                1) command -v btop &> /dev/null && btop || echo "[!] btop no instalado." ;;
+                                2) command -v htop &> /dev/null && htop || echo "[!] htop no instalado." ;;
+                                3) top ;;
+                            esac
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2)
+                            echo ""
+                            echo "[-] Resumen de almacenamiento local:"
+                            df -h -x tmpfs -x devtmpfs
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        3)
+                            if command -v ncdu &> /dev/null; then
+                                ncdu /
+                            else
+                                echo "[!] ncdu no está instalado."
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        4) break ;;
+                    esac
+                done
                 ;;
             3)
                 echo ""
                 echo "=========================================="
-                echo "       MONITORES DE RECURSOS - LEO"
+                echo "      GESTIÓN Y ESTADO DE DOCKER LAB"
                 echo "=========================================="
-                echo "1) btop (Monitor moderno y visual)"
-                echo "2) htop (Monitor interactivo por procesos)"
-                echo "3) top  (Monitor nativo básico)"
-                echo "=========================================="
-                echo -n "Elige qué monitor deseas abrir [1-3]: "
-                read -r monitor_opt
-
-                case $monitor_opt in
-                    1)
-                        if command -v btop &> /dev/null; then
-                            clear
-                            btop
-                        else
-                            echo "[!] btop no está instalado."
-                            read "instalar?¿Deseas instalar btop ahora? (s/n): "
-                            if [[ "$instalar" == "s" || "$instalar" == "S" ]]; then
-                                command -v apt &> /dev/null && sudo apt update && sudo apt install -y btop
-                                command -v dnf &> /dev/null && sudo dnf install -y btop
-                                log_action "Instalación completada: btop."
-                                clear
-                                btop
-                            fi
-                        fi
-                        ;;
-                    2)
-                        if command -v htop &> /dev/null; then
-                            clear
-                            htop
-                        else
-                            echo "[!] htop no está instalado."
-                            read "instalar?¿Deseas instalar htop ahora? (s/n): "
-                            if [[ "$instalar" == "s" || "$instalar" == "S" ]]; then
-                                command -v apt &> /dev/null && sudo apt update && sudo apt install -y htop
-                                command -v dnf &> /dev/null && sudo dnf install -y htop
-                                log_action "Instalación completada: htop."
-                                clear
-                                htop
-                            fi
-                        fi
-                        ;;
-                    3)
-                        clear
-                        top
-                        ;;
-                    *)
-                        echo "Opción no válida."
-                        read -r
-                        ;;
-                esac
+                if ! command -v docker &> /dev/null; then
+                    echo "[!] Docker no está instalado."
+                else
+                    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                fi
+                read -r "?Presiona Enter para volver..."
                 ;;
             4)
-                echo ""
-                echo "=========================================="
-                echo "     DIAGNÓSTICO DE DISCO Y ESPACIO"
-                echo "=========================================="
-                echo "[-] Resumen de particiones de almacenamiento:"
-                df -h -x tmpfs -x devtmpfs
-                echo ""
-                
-                if command -v ncdu &> /dev/null; then
-                    read "run_ncdu?¿Deseas abrir ncdu para explorar carpetas pesadas interactivamente? (s/n): "
-                    if [[ "$run_ncdu" == "s" || "$run_ncdu" == "S" ]]; then
-                        ncdu /
-                    fi
-                else
-                    echo "[i] Tip: La herramienta 'ncdu' no está instalada."
-                    read "inst_ncdu?¿Deseas instalar ncdu ahora? (s/n): "
-                    if [[ "$inst_ncdu" == "s" || "$inst_ncdu" == "S" ]]; then
-                        command -v apt &> /dev/null && sudo apt update && sudo apt install -y ncdu
-                        command -v dnf &> /dev/null && sudo dnf install -y ncdu
-                        log_action "Instalación completada: ncdu."
-                        ncdu /
-                    fi
-                fi
-                echo ""
-                echo -n "Presiona Enter para volver al menú..."
-                read -r
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "   MANTENIMIENTO Y SINCRONIZACIÓN GIT"
+                    echo "=========================================="
+                    echo "1) Actualizar paquetes de sistema (apt/dnf)"
+                    echo "2) Sincronizar repositorio de scripts (Git Pull/Push)"
+                    echo "3) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-3]: "
+                    read -r sub_opt
+                    case $sub_opt in
+                        1)
+                            local update_date=$(date +'%Y%m%d_%H%M%S')
+                            local log_dir="$HOME/.local/bin/scripts/logs"
+                            mkdir -p "$log_dir"
+                            local update_log="$log_dir/update_$update_date.log"
+                            
+                            if command -v apt &> /dev/null; then
+                                echo "[-] Actualizando con apt (Detalle en $update_log)..."
+                                { sudo apt update && sudo apt dist-upgrade -y && sudo apt autoremove -y; } > "$update_log" 2>&1
+                            elif command -v dnf &> /dev/null; then
+                                echo "[-] Actualizando con dnf omitiendo conflictos (Detalle en $update_log)..."
+                                { sudo dnf upgrade -y --skip-broken --nobest && sudo dnf autoremove -y; } > "$update_log" 2>&1
+                            fi
+                            echo "[OK] Proceso finalizado."
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2)
+                            cd ~/.local/bin/scripts || exit 1
+                            git pull
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        3) break ;;
+                    esac
+                done
                 ;;
             5)
-                echo ""
-                echo "=========================================="
-                echo "     DIAGNÓSTICO RÁPIDO DE RED"
-                echo "=========================================="
-                echo "[-] Direcciones IP e interfaces activas:"
-                ip -brief color address 2>/dev/null || ip a
-                echo ""
-                echo "[-] Prueba rápida de conectividad hacia Internet (1.1.1.1):"
-                if ping -c 2 1.1.1.1 &> /dev/null; then
-                    echo "[OK] Conexión hacia Internet: OPERATIVA"
-                else
-                    echo "[ERROR] Sin respuesta de ping hacia 1.1.1.1"
-                fi
-                echo ""
-                echo "[-] Resolución DNS de prueba (github.com):"
-                if host github.com &> /dev/null || nslookup github.com &> /dev/null; then
-                    echo "[OK] Resolución de nombres DNS: OPERATIVA"
-                else
-                    echo "[ERROR] Falló la resolución DNS de github.com"
-                fi
-                log_action "Verificación rápida de red ejecutada."
-                echo ""
-                echo -n "Presiona Enter para volver al menú..."
-                read -r
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "            UTILIDADES VARIAS"
+                    echo "=========================================="
+                    echo "1) Clima actual (wttr.in)"
+                    echo "2) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-2]: "
+                    read -r sub_opt
+                    case $sub_opt in
+                        1)
+                            echo ""
+                            echo "[-] Consultando wttr.in..."
+                            curl -s "wttr.in?lang=es"
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2) break ;;
+                    esac
+                done
                 ;;
-            6)
-                echo ""
-                echo "=========================================="
-                echo "    GESTIÓN Y ESTADO DE DOCKER LAB"
-                echo "=========================================="
-                
-                # 1. Validar si Docker está instalado
-                if ! command -v docker &> /dev/null; then
-                    echo "[!] Docker no está instalado en este sistema ($(get_os_info))."
-                    read "inst_docker?¿Deseas instalar Docker Engine ahora? (s/n): "
-                    if [[ "$inst_docker" == "s" || "$inst_docker" == "S" ]]; then
-                        if command -v apt &> /dev/null; then
-                            sudo apt update && sudo apt install -y docker.io docker-compose
-                            sudo systemctl enable --now docker
-                            log_action "Instalación completada: Docker vía apt."
-                        elif command -v dnf &> /dev/null; then
-                            sudo dnf install -y docker docker-compose
-                            sudo systemctl enable --now docker
-                            log_action "Instalación completada: Docker vía dnf."
-                        fi
-                    fi
-                    echo -n "Presiona Enter para volver al menú..."
-                    read -r
-                    continue
-                fi
-
-                # 2. Validar si el servicio de Docker está corriendo
-                if ! systemctl is-active --quiet docker; then
-                    echo "[!] El servicio de Docker está detenido o inactivo."
-                    read "start_docker?¿Deseas iniciar el servicio con 'sudo systemctl start docker'? (s/n): "
-                    if [[ "$start_docker" == "s" || "$start_docker" == "S" ]]; then
-                        sudo systemctl start docker
-                        log_action "Servicio Docker iniciado."
-                    else
-                        echo -n "Presiona Enter para volver al menú..."
-                        read -r
-                        continue
-                    fi
-                fi
-
-                # 3. Submenú de Docker
-                echo "1) Ver contenedores activos (docker ps)"
-                echo "2) Ver TODOS los contenedores (activos e inactivos)"
-                echo "3) Ver logs en tiempo real de un contenedor"
-                echo "4) Ver imágenes guardadas y uso de disco en Docker"
-                echo "=========================================="
-                echo -n "Elige una opción de Docker [1-4]: "
-                read -r d_opt
-
-                case $d_opt in
-                    1)
-                        echo ""
-                        echo "[-] Contenedores actualmente en ejecución:"
-                        local active_cnt=$(docker ps -q | wc -l)
-                        if [[ "$active_cnt" -eq 0 ]]; then
-                            echo "[i] No hay contenedores activos en este momento."
-                        else
-                            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                        fi
-                        log_action "Consulta de contenedores activos realizada."
-                        ;;
-                    2)
-                        echo ""
-                        echo "[-] Listado completo de contenedores:"
-                        local total_cnt=$(docker ps -a -q | wc -l)
-                        if [[ "$total_cnt" -eq 0 ]]; then
-                            echo "[i] No existen contenedores creados en el sistema."
-                        else
-                            docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
-                        fi
-                        log_action "Consulta de todos los contenedores realizada."
-                        ;;
-                    3)
-                        echo ""
-                        local total_cnt=$(docker ps -a -q | wc -l)
-                        if [[ "$total_cnt" -eq 0 ]]; then
-                            echo "[i] No hay contenedores disponibles para consultar logs."
-                        else
-                            local selected_container=""
-                            if command -v fzf &> /dev/null; then
-                                echo "[-] Selecciona el contenedor utilizando fzf:"
-                                selected_container=$(docker ps -a --format "{{.Names}}" | fzf)
-                            else
-                                echo "[-] Contenedores disponibles:"
-                                docker ps -a --format " - {{.Names}}"
-                                echo ""
-                                echo -n "Escribe el nombre del contenedor: "
-                                read -r selected_container
-                            fi
-
-                            if [[ -n "$selected_container" ]]; then
-                                echo "[-] Mostrando últimas 50 líneas de log para '$selected_container' (Ctrl+C para salir):"
-                                sleep 1
-                                docker logs -f --tail 50 "$selected_container"
-                                log_action "Verificación de logs para contenedor: $selected_container"
-                            fi
-                        fi
-                        ;;
-                    4)
-                        echo ""
-                        echo "[-] Imágenes guardadas localmente:"
-                        docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
-                        echo ""
-                        echo "[-] Resumen de espacio consumido por Docker:"
-                        docker system df
-                        log_action "Consulta de espacio e imágenes Docker realizada."
-                        ;;
-                    *)
-                        echo "Opción de Docker no válida."
-                        ;;
-                esac
-
-                echo ""
-                echo -n "Presiona Enter para volver al menú..."
-                read -r
-                ;;
-	7)
-                echo ""
-                local update_date=$(date +'%Y%m%d_%H%M%S')
-                local log_dir="$HOME/.local/bin/scripts/logs"
-                mkdir -p "$log_dir"
-                local update_log="$log_dir/update_$update_date.log"
-
-                echo "[-] Mantenimiento integral del sistema en ($(get_os_info))..."
-                log_action "Mantenimiento del sistema iniciado."
-                
-                if command -v apt &> /dev/null; then
-                    echo "[-] Ejecutando actualización en Debian (registrando en $update_log)..."
-                    {
-                        echo "=== INICIO ACTUALIZACIÓN APT - $(date) ==="
-                        sudo apt update && sudo apt dist-upgrade -y && sudo apt autoremove -y && sudo apt autoclean
-                        echo "=== FIN ACTUALIZACIÓN APT - $(date) ==="
-                    } > "$update_log" 2>&1
-                    echo "[OK] Sistema Debian actualizado. Detalle en: $update_log"
-                    log_action "Mantenimiento completado vía apt. Log: $update_log"
-                elif command -v dnf &> /dev/null; then
-                    echo "[-] Ejecutando actualización en Rocky Linux omitiendo conflictos (registrando en $update_log)..."
-                    {
-                        echo "=== INICIO ACTUALIZACIÓN DNF - $(date) ==="
-                        sudo dnf upgrade -y --skip-broken --nobest && sudo dnf autoremove -y
-                        echo "=== FIN ACTUALIZACIÓN DNF - $(date) ==="
-                    } > "$update_log" 2>&1
-                    echo "[OK] Sistema Rocky Linux actualizado (con omisión de conflictos). Detalle en: $update_log"
-                    log_action "Mantenimiento completado vía dnf con omisión de conflictos. Log: $update_log"
-                fi
-                echo ""
-                echo -n "Presiona Enter para volver al menú..."
-                read -r
-                ;;
-	8)
-                echo ""
-                echo "[-] Verificando repositorio en ~/.local/bin/scripts..."
-                cd ~/.local/bin/scripts || exit 1
-                
-                local current_remote=$(git remote get-url origin 2>/dev/null)
-                if [[ "$current_remote" =~ "^https://github.com/" ]]; then
-                    git remote set-url origin git@github.com:leocampos81/scripts.git
-                fi
-
-                if [[ -z "$(git config user.name)" ]]; then
-                    local git_name=""
-                    vared -p "Introduce tu nombre para Git: " git_name
-                    git config user.name "$git_name"
-                fi
-                
-                if [[ -z "$(git config user.email)" ]]; then
-                    local git_email=""
-                    vared -p "Introduce tu correo para Git: " git_email
-                    git config user.email "$git_email"
-                fi
-                
-                echo "[-] Ejecutando git pull..."
-                git pull
-                
-                if [[ -n $(git status --porcelain) ]]; then
-                    echo ""
-                    echo "[!] Cambios locales no confirmados:"
-                    git status -s
-                    echo ""
-                    
-                    read "resp?¿Deseas empaquetar estos cambios (git add & commit)? (s/n): "
-                    if [[ "$resp" == "s" || "$resp" == "S" ]]; then
-                        local commit_msg=""
-                        vared -p "Mensaje del commit (Enter para valor por defecto): " commit_msg
-                        [[ -z "$commit_msg" ]] && commit_msg="Actualización automática desde menú sysadmin $(date +'%Y-%m-%d %H:%M:%S')"
-                        
-                        git add .
-                        git commit -m "$commit_msg"
-                        log_action "Git commit ejecutado: $commit_msg"
-                    fi
-                fi
-
-                git fetch origin > /dev/null 2>&1
-                local ahead_count=$(git rev-list --count origin/main..HEAD 2>/dev/null)
-
-                if [[ "$ahead_count" -gt 0 ]]; then
-                    echo ""
-                    echo "[-] Ejecutando git push ($ahead_count commit(s) pendientes)..."
-                    if git push; then
-                        echo "[OK] Sincronizado exitosamente con GitHub."
-                        log_action "Git push exitoso."
-                    else
-                        echo "[ERROR] Falló el git push."
-                        log_action "Error en git push."
-                    fi
-                else
-                    echo "[OK] El repositorio está al día."
-                fi
-                echo ""
-                echo -n "Presiona Enter para volver al menú..."
-                read -r
-                ;;
-            9|[qQ])
+            6|[qQ])
                 echo "¡Hasta luego, Leonardo! Cerrando dashboard."
                 break
-                ;;
-            *)
-                echo ""
-                echo "Opción inválida: '$opt'."
-                read -r
                 ;;
         esac
     done
