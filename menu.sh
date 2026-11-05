@@ -336,14 +336,14 @@ menu() {
                     esac
                 done
                 ;;
-            6)
+	6)
                 while true; do
                     clear
                     echo "=========================================="
                     echo "     AUTOMATIZACIÓN E INFRAESTRUCTURA"
                     echo "=========================================="
-                    echo "1) Diagnóstico de Ansible"
-                    echo "2) Diagnóstico de Terraform"
+                    echo "1) Diagnóstico / Instalación de Ansible"
+                    echo "2) Diagnóstico / Instalación de Terraform"
                     echo "3) Volver al menú principal"
                     echo "=========================================="
                     echo -n "Elige una opción [1-3]: "
@@ -362,7 +362,7 @@ menu() {
                                 echo "Python Ver   : $(ansible --version | grep 'python version')"
                                 echo "Config File  : $(ansible --version | grep 'config file')"
                                 echo ""
-                                echo "[-] Búsqueda rápida de Playbooks y Roles en el sistema ($HOME):"
+                                echo "[-] Búsqueda rápida de Playbooks y Roles en $HOME:"
                                 local pb_files=$(find $HOME -type f \( -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | grep -iE 'playbook|ansible' | head -n 10)
                                 if [[ -n "$pb_files" ]]; then
                                     echo "$pb_files"
@@ -371,7 +371,17 @@ menu() {
                                 fi
                             else
                                 echo "[STATUS] : NO INSTALADO"
-                                echo "[i] Tip: Puedes instalarlo con apt install ansible o dnf install ansible."
+                                echo ""
+                                read -r "inst_ansible?¿Deseas instalar Ansible ahora? (s/n): "
+                                if [[ "$inst_ansible" == "s" || "$inst_ansible" == "S" ]]; then
+                                    echo "[-] Instalando Ansible..."
+                                    if command -v apt &> /dev/null; then
+                                        sudo apt update && sudo apt install -y ansible
+                                    elif command -v dnf &> /dev/null; then
+                                        sudo dnf install -y ansible-core || sudo dnf install -y ansible
+                                    fi
+                                    log_action "Instalación completada: Ansible."
+                                fi
                             fi
                             log_action "Diagnóstico Ansible ejecutado."
                             echo ""
@@ -396,7 +406,21 @@ menu() {
                                 fi
                             else
                                 echo "[STATUS] : NO INSTALADO"
-                                echo "[i] Tip: Puedes descargarlo directamente desde el sitio oficial de HashiCorp."
+                                echo ""
+                                read -r "inst_tf?¿Deseas instalar Terraform (HashiCorp Repo) ahora? (s/n): "
+                                if [[ "$inst_tf" == "s" || "$inst_tf" == "S" ]]; then
+                                    echo "[-] Configurando repositorio oficial e instalando Terraform..."
+                                    if command -v dnf &> /dev/null; then
+                                        sudo dnf install -y dnf-plugins-core
+                                        sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+                                        sudo dnf install -y terraform
+                                    elif command -v apt &> /dev/null; then
+                                        wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+                                        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+                                        sudo apt update && sudo apt install -y terraform
+                                    fi
+                                    log_action "Instalación completada: Terraform."
+                                fi
                             fi
                             log_action "Diagnóstico Terraform ejecutado."
                             echo ""
@@ -406,7 +430,7 @@ menu() {
                     esac
                 done
                 ;;
-            7|[qQ])
+	7|[qQ])
                 echo "¡Hasta luego, Leonardo! Cerrando dashboard."
                 break
                 ;;
