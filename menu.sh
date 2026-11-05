@@ -138,19 +138,108 @@ menu() {
                     esac
                 done
                 ;;
-            3)
-                echo ""
-                echo "=========================================="
-                echo "      GESTIÓN Y ESTADO DE DOCKER LAB"
-                echo "=========================================="
-                if ! command -v docker &> /dev/null; then
-                    echo "[!] Docker no está instalado."
-                else
-                    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                fi
-                read -r "?Presiona Enter para volver..."
+	3)
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "      GESTIÓN Y ESTADO DE DOCKER LAB"
+                    echo "=========================================="
+                    if ! command -v docker &> /dev/null; then
+                        echo "[!] Docker no está instalado en este sistema."
+                        read -r "?Presiona Enter para volver..."
+                        break
+                    fi
+
+                    if ! systemctl is-active --quiet docker 2>/dev/null; then
+                        echo "[!] El servicio Docker no está activo en systemd."
+                        read -r "?Presiona Enter para volver..."
+                        break
+                    fi
+
+                    echo "1) Ver contenedores activos (docker ps)"
+                    echo "2) Ver TODOS los contenedores (activos e inactivos)"
+                    echo "3) Inspeccionar logs de un contenedor (con fzf)"
+                    echo "4) Iniciar / Detener / Reiniciar contenedor (con fzf)"
+                    echo "5) Ver uso de disco e imágenes guardadas"
+                    echo "6) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-6]: "
+                    read -r d_opt
+
+                    case $d_opt in
+                        1)
+                            echo ""
+                            echo "[-] Contenedores en ejecución:"
+                            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2)
+                            echo ""
+                            echo "[-] Listado completo de contenedores:"
+                            docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        3)
+                            echo ""
+                            local target_cnt=""
+                            if command -v fzf &> /dev/null; then
+                                target_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor para ver logs > ")
+                            else
+                                echo -n "Nombre del contenedor: "
+                                read -r target_cnt
+                            fi
+
+                            if [[ -n "$target_cnt" ]]; then
+                                echo ""
+                                echo "[-] Mostrando últimas 50 líneas de log para '$target_cnt' (Ctrl+C para salir):"
+                                sleep 1
+                                docker logs -f --tail 50 "$target_cnt"
+                                log_action "Docker: Consulta de logs en $target_cnt."
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        4)
+                            echo ""
+                            local action_cnt=""
+                            if command -v fzf &> /dev/null; then
+                                action_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor a gestionar > ")
+                            else
+                                echo -n "Nombre del contenedor: "
+                                read -r action_cnt
+                            fi
+
+                            if [[ -n "$action_cnt" ]]; then
+                                echo ""
+                                echo "Gestión para '$action_cnt':"
+                                echo "1) Reiniciar (restart)"
+                                echo "2) Detener (stop)"
+                                echo "3) Iniciar (start)"
+                                echo -n "Selecciona acción [1-3]: "
+                                read -r act_choice
+                                case $act_choice in
+                                    1) sudo docker restart "$action_cnt" && log_action "Docker: Restart $action_cnt" ;;
+                                    2) sudo docker stop "$action_cnt" && log_action "Docker: Stop $action_cnt" ;;
+                                    3) sudo docker start "$action_cnt" && log_action "Docker: Start $action_cnt" ;;
+                                esac
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        5)
+                            echo ""
+                            echo "[-] Imágenes locales:"
+                            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+                            echo ""
+                            echo "[-] Uso global de recursos de Docker:"
+                            docker system df
+                            log_action "Docker: Consulta de espacio e imágenes."
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        6) break ;;
+                    esac
+                done
                 ;;
-            4)
+
+	4)
                 while true; do
                     clear
                     echo "=========================================="
