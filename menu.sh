@@ -34,13 +34,14 @@ menu() {
         echo "=========================================================="
         echo "1) Herramientas de sistema externas (dnsglobe, fzf, etc.)"
         echo "2) Monitoreo de recursos locales y disco (btop, df, ncdu)"
-        echo "3) Servicios y Contenedores Docker"
+        echo "3) Servicios y Contenedores Docker (Avanzado)"
         echo "4) Mantenimiento de Sistema y Sincronización Git"
         echo "5) Utilidades Varias (Clima wttr.in, etc.)"
-        echo "6) Salir (o presiona 'q')"
+        echo "6) Herramientas de Automatización (Ansible, Terraform)"
+        echo "7) Salir (o presiona 'q')"
         echo "=========================================================="
         
-        echo -n "LEO-DASHBOARD > Elige una opción [1-6 o q]: "
+        echo -n "LEO-DASHBOARD > Elige una opción [1-7 o q]: "
         read -r opt
 
         case $opt in
@@ -138,7 +139,7 @@ menu() {
                     esac
                 done
                 ;;
-	3)
+            3)
                 while true; do
                     clear
                     echo "=========================================="
@@ -158,12 +159,15 @@ menu() {
 
                     echo "1) Ver contenedores activos (docker ps)"
                     echo "2) Ver TODOS los contenedores (activos e inactivos)"
-                    echo "3) Inspeccionar logs de un contenedor (con fzf)"
-                    echo "4) Iniciar / Detener / Reiniciar contenedor (con fzf)"
-                    echo "5) Ver uso de disco e imágenes guardadas"
-                    echo "6) Volver al menú principal"
+                    echo "3) Monitoreo de CPU/RAM en tiempo real (docker stats)"
+                    echo "4) Inspeccionar logs de un contenedor (con fzf)"
+                    echo "5) Iniciar / Detener / Reiniciar contenedor (con fzf)"
+                    echo "6) Ver IP/Redes de un contenedor (docker inspect)"
+                    echo "7) Ver uso de disco e imágenes guardadas"
+                    echo "8) Mantenimiento / Limpieza (prune de contenedores e imágenes huérfanas)"
+                    echo "9) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-6]: "
+                    echo -n "Elige una opción [1-9]: "
                     read -r d_opt
 
                     case $d_opt in
@@ -180,6 +184,13 @@ menu() {
                             read -r "?Presiona Enter para continuar..."
                             ;;
                         3)
+                            echo ""
+                            echo "[-] Monitoreo en vivo de consumo de CPU/RAM/RED (Ctrl+C para salir):"
+                            sleep 1
+                            docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        4)
                             echo ""
                             local target_cnt=""
                             if command -v fzf &> /dev/null; then
@@ -198,7 +209,7 @@ menu() {
                             fi
                             read -r "?Presiona Enter para continuar..."
                             ;;
-                        4)
+                        5)
                             echo ""
                             local action_cnt=""
                             if command -v fzf &> /dev/null; then
@@ -224,7 +235,24 @@ menu() {
                             fi
                             read -r "?Presiona Enter para continuar..."
                             ;;
-                        5)
+                        6)
+                            echo ""
+                            local inspect_cnt=""
+                            if command -v fzf &> /dev/null; then
+                                inspect_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor a inspeccionar > ")
+                            else
+                                echo -n "Nombre del contenedor: "
+                                read -r inspect_cnt
+                            fi
+
+                            if [[ -n "$inspect_cnt" ]]; then
+                                echo ""
+                                echo "[-] IP y Redes asignadas a '$inspect_cnt':"
+                                docker inspect --format '{{range .NetworkSettings.Networks}}IP: {{.IPAddress}} | Gateway: {{.Gateway}} {{end}}' "$inspect_cnt"
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        7)
                             echo ""
                             echo "[-] Imágenes locales:"
                             docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
@@ -234,12 +262,21 @@ menu() {
                             log_action "Docker: Consulta de espacio e imágenes."
                             read -r "?Presiona Enter para continuar..."
                             ;;
-                        6) break ;;
+                        8)
+                            echo ""
+                            echo "[!] Limpieza de elementos en desuso en Docker..."
+                            read -r "confirm_prune?¿Deseas ejecutar 'docker system prune -f'? (s/n): "
+                            if [[ "$confirm_prune" == "s" || "$confirm_prune" == "S" ]]; then
+                                sudo docker system prune -f
+                                log_action "Docker: Executed docker system prune."
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        9) break ;;
                     esac
                 done
                 ;;
-
-	4)
+            4)
                 while true; do
                     clear
                     echo "=========================================="
@@ -299,7 +336,77 @@ menu() {
                     esac
                 done
                 ;;
-            6|[qQ])
+            6)
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "     AUTOMATIZACIÓN E INFRAESTRUCTURA"
+                    echo "=========================================="
+                    echo "1) Diagnóstico de Ansible"
+                    echo "2) Diagnóstico de Terraform"
+                    echo "3) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-3]: "
+                    read -r auto_opt
+
+                    case $auto_opt in
+                        1)
+                            echo ""
+                            echo "=========================================="
+                            echo "           DIAGNÓSTICO DE ANSIBLE"
+                            echo "=========================================="
+                            if command -v ansible &> /dev/null; then
+                                echo "[STATUS] : INSTALADO Y OPERATIVO"
+                                echo "Ruta binary  : $(which ansible)"
+                                echo "Versión      : $(ansible --version | head -n 1)"
+                                echo "Python Ver   : $(ansible --version | grep 'python version')"
+                                echo "Config File  : $(ansible --version | grep 'config file')"
+                                echo ""
+                                echo "[-] Búsqueda rápida de Playbooks y Roles en el sistema ($HOME):"
+                                local pb_files=$(find $HOME -type f \( -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | grep -iE 'playbook|ansible' | head -n 10)
+                                if [[ -n "$pb_files" ]]; then
+                                    echo "$pb_files"
+                                else
+                                    echo "[i] No se detectaron archivos de playbook evidentes en $HOME."
+                                fi
+                            else
+                                echo "[STATUS] : NO INSTALADO"
+                                echo "[i] Tip: Puedes instalarlo con apt install ansible o dnf install ansible."
+                            fi
+                            log_action "Diagnóstico Ansible ejecutado."
+                            echo ""
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2)
+                            echo ""
+                            echo "=========================================="
+                            echo "          DIAGNÓSTICO DE TERRAFORM"
+                            echo "=========================================="
+                            if command -v terraform &> /dev/null; then
+                                echo "[STATUS] : INSTALADO Y OPERATIVO"
+                                echo "Ruta binary  : $(which terraform)"
+                                echo "Versión      : $(terraform version | head -n 1)"
+                                echo ""
+                                echo "[-] Búsqueda rápida de proyectos Terraform (.tf) en $HOME:"
+                                local tf_files=$(find $HOME -type f -name "*.tf" 2>/dev/null | head -n 10)
+                                if [[ -n "$tf_files" ]]; then
+                                    echo "$tf_files"
+                                else
+                                    echo "[i] No se detectaron archivos .tf en $HOME."
+                                fi
+                            else
+                                echo "[STATUS] : NO INSTALADO"
+                                echo "[i] Tip: Puedes descargarlo directamente desde el sitio oficial de HashiCorp."
+                            fi
+                            log_action "Diagnóstico Terraform ejecutado."
+                            echo ""
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        3) break ;;
+                    esac
+                done
+                ;;
+            7|[qQ])
                 echo "¡Hasta luego, Leonardo! Cerrando dashboard."
                 break
                 ;;
