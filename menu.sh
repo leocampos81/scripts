@@ -38,10 +38,11 @@ menu() {
         echo "4) Mantenimiento de Sistema y Sincronización Git"
         echo "5) Utilidades Varias (Clima wttr.in, etc.)"
         echo "6) Herramientas de Automatización (Ansible, Terraform)"
-        echo "7) Salir (o presiona 'q')"
+        echo "7) Gestión y Ejecución de Scripts"
+        echo "8) Salir (o presiona 'q')"
         echo "=========================================================="
         
-        echo -n "LEO-DASHBOARD > Elige una opción [1-7 o q]: "
+        echo -n "LEO-DASHBOARD > Elige una opción [1-8 o q]: "
         read -r opt
 
         case $opt in
@@ -430,7 +431,63 @@ menu() {
                     esac
                 done
                 ;;
-            7|[qQ])
+            7)
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "      GESTIÓN Y EJECUCIÓN DE SCRIPTS"
+                    echo "=========================================="
+                    echo "1) Ejecutar script forzando intérprete Bash"
+                    echo "2) Auditar compatibilidad (Revisar Shebang)"
+                    echo "3) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-3]: "
+                    read -r scr_opt
+
+                    case $scr_opt in
+                        1)
+                            echo ""
+                            echo -n "Ingresa la ruta o nombre del script a ejecutar: "
+                            read -r target_script
+                            if [[ -f "$target_script" ]]; then
+                                echo "[-] Ejecutando '$target_script' bajo entorno Bash controlado..."
+                                bash "$target_script"
+                                log_action "Script ejecutado con Bash: $target_script"
+                            else
+                                echo "[ERROR] El archivo '$target_script' no existe."
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2)
+                            echo ""
+                            echo -n "Ingresa la ruta del script a auditar: "
+                            read -r audit_script
+                            if [[ -f "$audit_script" ]]; then
+                                echo "=========================================="
+                                echo " AUDITORÍA DE ENTORNO Y SHEBANG"
+                                echo "=========================================="
+                                echo "Archivo     : $audit_script"
+                                echo -n "Shebang     : "
+                                head -n 1 "$audit_script"
+                                
+                                local first_line=$(head -n 1 "$audit_script")
+                                if [[ "$first_line" =~ "bash" ]]; then
+                                    echo "[STATUS]    : Diseñado nativamente para BASH."
+                                elif [[ "$first_line" =~ "zsh" ]]; then
+                                    echo "[STATUS]    : Diseñado nativamente para ZSH."
+                                else
+                                    echo "[STATUS]    : Shebang genérico o no especificado."
+                                fi
+                            else
+                                echo "[ERROR] El archivo no existe."
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        3) break ;;
+                    esac
+                done
+                ;;
+            8|[qQ])
                 echo "¡Hasta luego, Leonardo! Cerrando dashboard."
                 break
                 ;;
