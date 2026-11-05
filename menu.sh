@@ -24,7 +24,7 @@ menu() {
         clear
         echo "╔══════════════════════════════════════════════════════════════════╗"
         echo "║                                                                  ║"
-        echo "║                  P R O M E T H E R I O N  2 1 1 2                ║"
+        echo "║                  P R O M E T H E R I O N  2 1 1 2                  ║"
         echo "║                 S Y S A D M I N   D A S H B O A R D              ║"
         echo "║                                                                  ║"
         echo "╚══════════════════════════════════════════════════════════════════╝"
@@ -438,7 +438,7 @@ menu() {
                     echo "      GESTIÓN Y EJECUCIÓN DE SCRIPTS"
                     echo "=========================================="
                     echo "1) Ejecutar script forzando intérprete Bash"
-                    echo "2) Auditar compatibilidad (Revisar Shebang)"
+                    echo "2) Auditar compatibilidad y adaptar Shebang"
                     echo "3) Volver al menú principal"
                     echo "=========================================="
                     echo -n "Elige una opción [1-3]: "
@@ -473,6 +473,16 @@ menu() {
                                 local first_line=$(head -n 1 "$audit_script")
                                 if [[ "$first_line" =~ "bash" ]]; then
                                     echo "[STATUS]    : Diseñado nativamente para BASH."
+                                    echo ""
+                                    read -r "migrar?¿Deseas adaptar el shebang a Zsh o universal (#!/usr/bin/env zsh)? (s/n): "
+                                    if [[ "$migrar" == "s" || "$migrar" == "S" ]]; then
+                                        local temp_file=$(mktemp)
+                                        echo "#!/usr/bin/env zsh" > "$temp_file"
+                                        tail -n +2 "$audit_script" >> "$temp_file"
+                                        mv "$temp_file" "$audit_script"
+                                        echo "[OK] Shebang actualizado exitosamente a Zsh."
+                                        log_action "Script migrado a Zsh: $audit_script"
+                                    fi
                                 elif [[ "$first_line" =~ "zsh" ]]; then
                                     echo "[STATUS]    : Diseñado nativamente para ZSH."
                                 else
