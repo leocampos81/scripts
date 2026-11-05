@@ -315,27 +315,40 @@ menu() {
                 echo -n "Presiona Enter para volver al menú..."
                 read -r
                 ;;
-            7)
+	7)
                 echo ""
+                local update_date=$(date +'%Y%m%d_%H%M%S')
+                local log_dir="$HOME/.local/bin/scripts/logs"
+                mkdir -p "$log_dir"
+                local update_log="$log_dir/update_$update_date.log"
+
                 echo "[-] Mantenimiento integral del sistema en ($(get_os_info))..."
                 log_action "Mantenimiento del sistema iniciado."
                 
                 if command -v apt &> /dev/null; then
-                    echo "[-] Ejecutando apt update & dist-upgrade..."
-                    sudo apt update && sudo apt dist-upgrade -y && sudo apt autoremove -y && sudo apt autoclean
-                    echo "[OK] Sistema Debian actualizado."
-                    log_action "Mantenimiento completado vía apt."
+                    echo "[-] Ejecutando actualización en Debian (registrando en $update_log)..."
+                    {
+                        echo "=== INICIO ACTUALIZACIÓN APT - $(date) ==="
+                        sudo apt update && sudo apt dist-upgrade -y && sudo apt autoremove -y && sudo apt autoclean
+                        echo "=== FIN ACTUALIZACIÓN APT - $(date) ==="
+                    } > "$update_log" 2>&1
+                    echo "[OK] Sistema Debian actualizado. Detalle en: $update_log"
+                    log_action "Mantenimiento completado vía apt. Log: $update_log"
                 elif command -v dnf &> /dev/null; then
-                    echo "[-] Ejecutando dnf upgrade..."
-                    sudo dnf upgrade -y && sudo dnf autoremove -y
-                    echo "[OK] Sistema Rocky Linux actualizado."
-                    log_action "Mantenimiento completado vía dnf."
+                    echo "[-] Ejecutando actualización en Rocky Linux omitiendo conflictos (registrando en $update_log)..."
+                    {
+                        echo "=== INICIO ACTUALIZACIÓN DNF - $(date) ==="
+                        sudo dnf upgrade -y --skip-broken --nobest && sudo dnf autoremove -y
+                        echo "=== FIN ACTUALIZACIÓN DNF - $(date) ==="
+                    } > "$update_log" 2>&1
+                    echo "[OK] Sistema Rocky Linux actualizado (con omisión de conflictos). Detalle en: $update_log"
+                    log_action "Mantenimiento completado vía dnf con omisión de conflictos. Log: $update_log"
                 fi
                 echo ""
                 echo -n "Presiona Enter para volver al menú..."
                 read -r
                 ;;
-            8)
+	8)
                 echo ""
                 echo "[-] Verificando repositorio en ~/.local/bin/scripts..."
                 cd ~/.local/bin/scripts || exit 1
