@@ -51,7 +51,7 @@ menu() {
         echo "[*] Usuario Activo : $USER@$(hostname)"
         echo "[*] Servidor actual: $sistema_actual"
         echo "=========================================================="
-        echo "1) Herramientas externas (dnsglobe, fzf, eza, dust, atuin)"
+        echo "1) Herramientas de sistema externas (dnsglobe, fzf, etc.)"
         echo "2) Monitoreo de recursos locales y disco (btop, df, duf, ncdu)"
         echo "3) Servicios y Contenedores Docker (Avanzado)"
         echo "4) Mantenimiento de Sistema y Sincronización Git"
@@ -73,12 +73,9 @@ menu() {
                     echo "=========================================="
                     echo "1) dnsglobe (Buscador y explorador de DNS)"
                     echo "2) fzf (Buscador difuso para terminal)"
-                    echo "3) eza (Reemplazo moderno de ls con Git)"
-                    echo "4) dust (Visualizador gráfico de espacio en disco)"
-                    echo "5) atuin (Historial avanzado de shell cifrado)"
-                    echo "6) Volver al menú principal"
+                    echo "3) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-6]: " sub_opt
+                    prompt_input "Elige una opción [1-3]: " sub_opt
                     case $sub_opt in
                         1)
                             echo ""
@@ -117,68 +114,7 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        3)
-                            echo ""
-                            echo "[-] Verificando el estado de eza..."
-                            if command -v eza &> /dev/null; then
-                                echo "[OK] eza ya está instalado y operativo."
-                                log_action "Verificación: eza ya estaba instalado."
-                            else
-                                echo "[!] eza no encontrado."
-                                prompt_input "¿Deseas instalar eza ahora? (s/n): " inst_eza
-                                if [[ "$inst_eza" == "s" || "$inst_eza" == "S" ]]; then
-                                    if command -v apt &> /dev/null; then
-                                        sudo apt update && sudo apt install -y eza || cargo install eza
-                                    elif command -v dnf &> /dev/null; then
-                                        sudo dnf install -y eza || cargo install eza
-                                    else
-                                        cargo install eza
-                                    fi
-                                    log_action "Instalación completada: eza."
-                                fi
-                            fi
-                            pause_screen
-                            ;;
-                        4)
-                            echo ""
-                            echo "[-] Verificando el estado de dust..."
-                            if command -v dust &> /dev/null; then
-                                echo "[OK] dust ya está instalado y operativo."
-                                log_action "Verificación: dust ya estaba instalado."
-                            else
-                                echo "[!] dust no encontrado."
-                                prompt_input "¿Deseas instalar dust ahora? (s/n): " inst_dust
-                                if [[ "$inst_dust" == "s" || "$inst_dust" == "S" ]]; then
-                                    if command -v apt &> /dev/null; then
-                                        sudo apt update && sudo apt install -y du-dust || cargo install du-dust
-                                    elif command -v dnf &> /dev/null; then
-                                        sudo dnf install -y du-dust || cargo install du-dust
-                                    else
-                                        cargo install du-dust
-                                    fi
-                                    log_action "Instalación completada: dust."
-                                fi
-                            fi
-                            pause_screen
-                            ;;
-                        5)
-                            echo ""
-                            echo "[-] Verificando el estado de atuin..."
-                            if command -v atuin &> /dev/null; then
-                                echo "[OK] atuin ya está instalado y operativo."
-                                log_action "Verificación: atuin ya estaba instalado."
-                            else
-                                echo "[!] atuin no encontrado."
-                                prompt_input "¿Deseas instalar atuin ahora vía script oficial? (s/n): " inst_atuin
-                                if [[ "$inst_atuin" == "s" || "$inst_atuin" == "S" ]]; then
-                                    bash <(curl --proto '=https' --tlsv1.2 -sSf https://app.atuin.sh)
-                                    echo "[OK] Instalación de atuin finalizada."
-                                    log_action "Instalación completada: atuin."
-                                fi
-                            fi
-                            pause_screen
-                            ;;
-                        6) break ;;
+                        3) break ;;
                     esac
                 done
                 ;;
