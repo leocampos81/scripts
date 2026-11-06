@@ -51,8 +51,8 @@ menu() {
         echo "[*] Usuario Activo : $USER@$(hostname)"
         echo "[*] Servidor actual: $sistema_actual"
         echo "=========================================================="
-        echo "1) Herramientas de sistema externas (dnsglobe, fzf, etc.)"
-        echo "2) Monitoreo de recursos locales y disco (btop, df, duf, ncdu)"
+        echo "1) Herramientas de sistema nativas (grep, rsync, diff, etc.)"
+        echo "2) Monitoreo de recursos locales y disco (btop, duf, ncdu)"
         echo "3) Servicios y Contenedores Docker (Avanzado)"
         echo "4) Mantenimiento de Sistema y Sincronización Git"
         echo "5) Utilidades Varias (Clima wttr.in, etc.)"
@@ -69,52 +69,80 @@ menu() {
                 while true; do
                     clear
                     echo "=========================================="
-                    echo "   HERRAMIENTAS DE SISTEMA EXTERNAS"
+                    echo "     HERRAMIENTAS DE SISTEMA NATIVAS"
                     echo "=========================================="
-                    echo "1) dnsglobe (Buscador y explorador de DNS)"
-                    echo "2) fzf (Buscador difuso para terminal)"
-                    echo "3) Volver al menú principal"
+                    echo "1) Análisis de logs y búsqueda (grep / egrep)"
+                    echo "2) Conteo de líneas, palabras y bytes (wc)"
+                    echo "3) Comparación de archivos y diferencias (diff)"
+                    echo "4) Sincronización y respaldo rápido (rsync)"
+                    echo "5) Resumen de espacio en disco (df -h)"
+                    echo "6) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-3]: " sub_opt
-                    case $sub_opt in
+                    prompt_input "Elige una opción [1-6]: " nat_opt
+
+                    case $nat_opt in
                         1)
                             echo ""
-                            echo "[-] Verificando el estado de dnsglobe..."
-                            if command -v dnsglobe &> /dev/null; then
-                                echo "[OK] dnsglobe ya está instalado y operativo."
-                                log_action "Verificación: dnsglobe ya estaba instalado."
-                            else
-                                echo "[!] dnsglobe no encontrado."
-                                prompt_input "¿Deseas instalar dnsglobe ahora vía Cargo/Script? (s/n): " inst_dns
-                                if [[ "$inst_dns" == "s" || "$inst_dns" == "S" ]]; then
-                                    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/514-labs/dnsglobe/releases/download/v0.3.0/dnsglobe-installer.sh | sh
-                                    echo "[OK] Instalación de dnsglobe finalizada."
-                                    log_action "Instalación completada: dnsglobe vía curl."
+                            echo "=========================================="
+                            echo "    BÚSQUEDA Y FILTRADO EN TEXTO / LOGS"
+                            echo "=========================================="
+                            prompt_input "Ruta del archivo a inspeccionar (ej: /var/log/syslog): " log_file
+                            if [[ -f "$log_file" ]]; then
+                                prompt_input "Patrón o término de búsqueda (ej: ERROR|FAIL): " pattern
+                                if [[ -n "$pattern" ]]; then
+                                    echo "[-] Resultado de la búsqueda en '$log_file':"
+                                    grep -iE "$pattern" "$log_file" | head -n 30
+                                    log_action "Grep: Búsqueda de '$pattern' en $log_file"
                                 fi
+                            else
+                                echo "[ERROR] El archivo '$log_file' no existe o no se puede leer."
                             fi
                             pause_screen
                             ;;
                         2)
                             echo ""
-                            echo "[-] Verificando el estado de fzf..."
-                            if command -v fzf &> /dev/null; then
-                                echo "[OK] fzf ya está instalado y operativo."
-                                log_action "Verificación: fzf ya estaba instalado."
+                            prompt_input "Ruta del archivo a contar (wc): " wc_file
+                            if [[ -f "$wc_file" ]]; then
+                                echo "[-] Métricas del archivo (Líneas / Palabras / Bytes):"
+                                wc "$wc_file"
                             else
-                                echo "[!] fzf no encontrado."
-                                prompt_input "¿Deseas instalar fzf ahora? (s/n): " inst_fzf
-                                if [[ "$inst_fzf" == "s" || "$inst_fzf" == "S" ]]; then
-                                    if command -v apt &> /dev/null; then
-                                        sudo apt update && sudo apt install -y fzf
-                                    elif command -v dnf &> /dev/null; then
-                                        sudo dnf install -y fzf
-                                    fi
-                                    log_action "Instalación completada: fzf."
-                                fi
+                                echo "[ERROR] El archivo no existe."
                             fi
                             pause_screen
                             ;;
-                        3) break ;;
+                        3)
+                            echo ""
+                            prompt_input "Ruta del Archivo 1: " f1
+                            prompt_input "Ruta del Archivo 2: " f2
+                            if [[ -f "$f1" && -f "$f2" ]]; then
+                                echo "[-] Diferencias encontradas (diff -u):"
+                                diff -u "$f1" "$f2" || true
+                            else
+                                echo "[ERROR] Uno o ambos archivos no existen."
+                            fi
+                            pause_screen
+                            ;;
+                        4)
+                            echo ""
+                            echo "=========================================="
+                            echo "      SINCRONIZACIÓN CON RSYNC"
+                            echo "=========================================="
+                            prompt_input "Directorio o archivo origen: " r_src
+                            prompt_input "Directorio o host destino: " r_dst
+                            if [[ -n "$r_src" && -n "$r_dst" ]]; then
+                                echo "[-] Ejecutando 'rsync -avh --progress':"
+                                rsync -avh --progress "$r_src" "$r_dst"
+                                log_action "Rsync: $r_src hacia $r_dst"
+                            fi
+                            pause_screen
+                            ;;
+                        5)
+                            echo ""
+                            echo "[-] Resumen de discos (df -h):"
+                            df -h -x tmpfs -x devtmpfs
+                            pause_screen
+                            ;;
+                        6) break ;;
                     esac
                 done
                 ;;
