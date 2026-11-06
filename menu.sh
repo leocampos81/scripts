@@ -28,8 +28,18 @@ pause_screen() {
 prompt_input() {
     local prompt_msg="$1"
     local var_name="$2"
+    
+    # Guarda la configuración actual del terminal
+    local old_stty=$(stty -g 2>/dev/null)
+    
+    # Mapea Backspace (^? y ^H) para borrar caracteres correctamente
+    stty erase '^?' erase '^H' 2>/dev/null
+    
     echo -n "$prompt_msg"
     read -r "$var_name"
+    
+    # Restaura la configuración del terminal
+    stty "$old_stty" 2>/dev/null
 }
 
 menu() {
