@@ -24,7 +24,7 @@ menu() {
         clear
         echo "╔══════════════════════════════════════════════════════════════════╗"
         echo "║                                                                  ║"
-        echo "║                  P R O M E T H E R I O N  2 1 1 2                  ║"
+        echo "║                  P R O M E T H E R I O N  2 1 1 2                ║"
         echo "║                 S Y S A D M I N   D A S H B O A R D              ║"
         echo "║                                                                  ║"
         echo "╚══════════════════════════════════════════════════════════════════╝"
@@ -33,16 +33,17 @@ menu() {
         echo "[*] Servidor actual: $sistema_actual"
         echo "=========================================================="
         echo "1) Herramientas de sistema externas (dnsglobe, fzf, etc.)"
-        echo "2) Monitoreo de recursos locales y disco (btop, df, ncdu)"
+        echo "2) Monitoreo de recursos locales y disco (btop, df, duf, ncdu)"
         echo "3) Servicios y Contenedores Docker (Avanzado)"
         echo "4) Mantenimiento de Sistema y Sincronización Git"
         echo "5) Utilidades Varias (Clima wttr.in, etc.)"
         echo "6) Herramientas de Automatización (Ansible, Terraform)"
-        echo "7) Gestión y Ejecución de Scripts"
-        echo "8) Salir (o presiona 'q')"
+        echo "7) Diagnóstico y Pruebas de Red (IP, Ping, Traceroute, Curl)"
+        echo "8) Auditoría de Red y Seguridad (Nmap)"
+        echo "9) Salir (o presiona 'q')"
         echo "=========================================================="
         
-        echo -n "LEO-DASHBOARD > Elige una opción [1-8 o q]: "
+        echo -n "LEO-DASHBOARD > Elige una opción [1-9 o q]: "
         read -r opt
 
         case $opt in
@@ -66,27 +67,33 @@ menu() {
                                 echo "[OK] dnsglobe ya está instalado y operativo."
                                 log_action "Verificación: dnsglobe ya estaba instalado."
                             else
-                                echo "[!] dnsglobe no encontrado. Instalando..."
-                                curl --proto '=https' --tlsv1.2 -LsSf https://github.com/514-labs/dnsglobe/releases/download/v0.3.0/dnsglobe-installer.sh | sh
-                                echo "[OK] Instalación de dnsglobe finalizada."
-                                log_action "Instalación completada: dnsglobe vía curl."
+                                echo "[!] dnsglobe no encontrado."
+                                read -r "inst_dns?¿Deseas instalar dnsglobe ahora vía Cargo/Script? (s/n): "
+                                if [[ "$inst_dns" == "s" || "$inst_dns" == "S" ]]; then
+                                    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/514-labs/dnsglobe/releases/download/v0.3.0/dnsglobe-installer.sh | sh
+                                    echo "[OK] Instalación de dnsglobe finalizada."
+                                    log_action "Instalación completada: dnsglobe vía curl."
+                                fi
                             fi
                             read -r "?Presiona Enter para continuar..."
                             ;;
                         2)
                             echo ""
-                            echo "[-] Verificando el estado de fzf en ($(get_os_info))..."
+                            echo "[-] Verificando el estado de fzf..."
                             if command -v fzf &> /dev/null; then
                                 echo "[OK] fzf ya está instalado y operativo."
                                 log_action "Verificación: fzf ya estaba instalado."
                             else
-                                echo "[!] fzf no encontrado. Instalando..."
-                                if command -v apt &> /dev/null; then
-                                    sudo apt update && sudo apt install -y fzf
-                                elif command -v dnf &> /dev/null; then
-                                    sudo dnf install -y fzf
+                                echo "[!] fzf no encontrado."
+                                read -r "inst_fzf?¿Deseas instalar fzf ahora? (s/n): "
+                                if [[ "$inst_fzf" == "s" || "$inst_fzf" == "S" ]]; then
+                                    if command -v apt &> /dev/null; then
+                                        sudo apt update && sudo apt install -y fzf
+                                    elif command -v dnf &> /dev/null; then
+                                        sudo dnf install -y fzf
+                                    fi
+                                    log_action "Instalación completada: fzf."
                                 fi
-                                log_action "Instalación completada: fzf."
                             fi
                             read -r "?Presiona Enter para continuar..."
                             ;;
@@ -101,11 +108,12 @@ menu() {
                     echo "   MONITOREO DE RECURSOS LOCALES Y DISCO"
                     echo "=========================================="
                     echo "1) Monitores de procesos (btop / htop / top)"
-                    echo "2) Diagnóstico de disco y espacio (df)"
-                    echo "3) Explorador interactivo de carpetas pesadas (ncdu)"
-                    echo "4) Volver al menú principal"
+                    echo "2) Diagnóstico de disco tradicional (df -h)"
+                    echo "3) Visualizador visual de almacenamiento (duf)"
+                    echo "4) Explorador interactivo de carpetas pesadas (ncdu)"
+                    echo "5) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-4]: "
+                    echo -n "Elige una opción [1-5]: "
                     read -r sub_opt
                     case $sub_opt in
                         1)
@@ -124,11 +132,29 @@ menu() {
                             ;;
                         2)
                             echo ""
-                            echo "[-] Resumen de almacenamiento local:"
+                            echo "[-] Resumen de almacenamiento local (df):"
                             df -h -x tmpfs -x devtmpfs
                             read -r "?Presiona Enter para continuar..."
                             ;;
                         3)
+                            echo ""
+                            if command -v duf &> /dev/null; then
+                                duf
+                            else
+                                echo "[!] duf no está instalado."
+                                read -r "inst_duf?¿Deseas instalar duf ahora? (s/n): "
+                                if [[ "$inst_duf" == "s" || "$inst_duf" == "S" ]]; then
+                                    if command -v apt &> /dev/null; then
+                                        sudo apt update && sudo apt install -y duf
+                                    elif command -v dnf &> /dev/null; then
+                                        sudo dnf install -y duf
+                                    fi
+                                    log_action "Instalación completada: duf."
+                                fi
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        4)
                             if command -v ncdu &> /dev/null; then
                                 ncdu /
                             else
@@ -136,7 +162,7 @@ menu() {
                             fi
                             read -r "?Presiona Enter para continuar..."
                             ;;
-                        4) break ;;
+                        5) break ;;
                     esac
                 done
                 ;;
@@ -435,69 +461,166 @@ menu() {
                 while true; do
                     clear
                     echo "=========================================="
-                    echo "      GESTIÓN Y EJECUCIÓN DE SCRIPTS"
+                    echo "    DIAGNÓSTICO Y PRUEBAS DE RED LOCAL"
                     echo "=========================================="
-                    echo "1) Ejecutar script forzando intérprete Bash"
-                    echo "2) Auditar compatibilidad y adaptar Shebang"
-                    echo "3) Volver al menú principal"
+                    echo "1) Direcciones IP y Rutas de red (ip a / ip route)"
+                    echo "2) Prueba de latencia y conectividad (ping)"
+                    echo "3) Trazado de ruta hacia host/IP (traceroute / tracepath)"
+                    echo "4) Diagnóstico HTTP/HTTPS y cabeceras (curl)"
+                    echo "5) Puertos locales escuchando en el sistema (ss -tulpn)"
+                    echo "6) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-3]: "
-                    read -r scr_opt
+                    echo -n "Elige una opción [1-6]: "
+                    read -r net_opt
 
-                    case $scr_opt in
+                    case $net_opt in
                         1)
                             echo ""
-                            echo -n "Ingresa la ruta o nombre del script a ejecutar: "
-                            read -r target_script
-                            if [[ -f "$target_script" ]]; then
-                                echo "[-] Ejecutando '$target_script' bajo entorno Bash controlado..."
-                                bash "$target_script"
-                                log_action "Script ejecutado con Bash: $target_script"
-                            else
-                                echo "[ERROR] El archivo '$target_script' no existe."
+                            echo "[-] Interfaces de red y direcciones IP:"
+                            ip -brief address
+                            echo ""
+                            echo "[-] Tabla de ruteo por defecto:"
+                            ip route
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        2)
+                            echo ""
+                            echo -n "Ingresa la IP o Dominio a probar (ej: 8.8.8.8 o google.com): "
+                            read -r ping_target
+                            if [[ -n "$ping_target" ]]; then
+                                echo "[-] Enviando 4 paquetes ICMP a '$ping_target'..."
+                                ping -c 4 "$ping_target"
+                                log_action "Red: Ping ejecutado hacia $ping_target"
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        3)
+                            echo ""
+                            echo -n "Ingresa la IP o Dominio a trazar: "
+                            read -r trace_target
+                            if [[ -n "$trace_target" ]]; then
+                                if command -v traceroute &> /dev/null; then
+                                    traceroute "$trace_target"
+                                elif command -v tracepath &> /dev/null; then
+                                    tracepath "$trace_target"
+                                else
+                                    echo "[!] Ni traceroute ni tracepath están instalados."
+                                fi
+                                log_action "Red: Traceroute a $trace_target"
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        4)
+                            echo ""
+                            echo -n "Ingresa la URL objetivo (ej: https://google.com): "
+                            read -r curl_target
+                            if [[ -n "$curl_target" ]]; then
+                                echo "[-] Obteniendo cabeceras HTTP y código de respuesta..."
+                                curl -I -L -s "$curl_target" | head -n 20
+                                log_action "Red: Curl cabeceras en $curl_target"
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        5)
+                            echo ""
+                            echo "[-] Puertos TCP/UDP en escucha activa:"
+                            sudo ss -tulpn | grep LISTEN
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        6) break ;;
+                    esac
+                done
+                ;;
+            8)
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "     AUDITORÍA DE RED Y SEGURIDAD (NMAP)"
+                    echo "=========================================="
+                    
+                    if ! command -v nmap &> /dev/null; then
+                        echo "[!] nmap no está instalado en este sistema."
+                        echo ""
+                        read -r "inst_nmap?¿Deseas instalar nmap ahora? (s/n): "
+                        if [[ "$inst_nmap" == "s" || "$inst_nmap" == "S" ]]; then
+                            echo "[-] Instalando nmap..."
+                            if command -v apt &> /dev/null; then
+                                sudo apt update && sudo apt install -y nmap
+                            elif command -v dnf &> /dev/null; then
+                                sudo dnf install -y nmap
+                            fi
+                            log_action "Instalación completada: nmap."
+                        else
+                            read -r "?Presiona Enter para volver..."
+                            break
+                        fi
+                    fi
+
+                    clear
+                    echo "=========================================="
+                    echo "     AUDITORÍA DE RED Y SEGURIDAD (NMAP)"
+                    echo "=========================================="
+                    echo "[STATUS] : INSTALADO Y OPERATIVO ($(nmap --version | head -n 1))"
+                    echo "------------------------------------------"
+                    echo "1) Escaneo rápido de puertos abiertos en IP/Host"
+                    echo "2) Escaneo completo con detección de versiones (-sV)"
+                    echo "3) Escaneo agresivo (SO, versiones y scripts -A)"
+                    echo "4) Escaneo de red local (descubrimiento de hosts activos)"
+                    echo "5) Volver al menú principal"
+                    echo "=========================================="
+                    echo -n "Elige una opción [1-5]: "
+                    read -r nmap_opt
+
+                    case $nmap_opt in
+                        1)
+                            echo ""
+                            echo -n "Ingresa la IP o hostname objetivo: "
+                            read -r target_ip
+                            if [[ -n "$target_ip" ]]; then
+                                echo "[-] Ejecutando escaneo rápido en '$target_ip'..."
+                                nmap -T4 "$target_ip"
+                                log_action "Nmap: Escaneo rápido en $target_ip"
                             fi
                             read -r "?Presiona Enter para continuar..."
                             ;;
                         2)
                             echo ""
-                            echo -n "Ingresa la ruta del script a auditar: "
-                            read -r audit_script
-                            if [[ -f "$audit_script" ]]; then
-                                echo "=========================================="
-                                echo " AUDITORÍA DE ENTORNO Y SHEBANG"
-                                echo "=========================================="
-                                echo "Archivo     : $audit_script"
-                                echo -n "Shebang     : "
-                                head -n 1 "$audit_script"
-                                
-                                local first_line=$(head -n 1 "$audit_script")
-                                if [[ "$first_line" =~ "bash" ]]; then
-                                    echo "[STATUS]    : Diseñado nativamente para BASH."
-                                    echo ""
-                                    read -r "migrar?¿Deseas adaptar el shebang a Zsh o universal (#!/usr/bin/env zsh)? (s/n): "
-                                    if [[ "$migrar" == "s" || "$migrar" == "S" ]]; then
-                                        local temp_file=$(mktemp)
-                                        echo "#!/usr/bin/env zsh" > "$temp_file"
-                                        tail -n +2 "$audit_script" >> "$temp_file"
-                                        mv "$temp_file" "$audit_script"
-                                        echo "[OK] Shebang actualizado exitosamente a Zsh."
-                                        log_action "Script migrado a Zsh: $audit_script"
-                                    fi
-                                elif [[ "$first_line" =~ "zsh" ]]; then
-                                    echo "[STATUS]    : Diseñado nativamente para ZSH."
-                                else
-                                    echo "[STATUS]    : Shebang genérico o no especificado."
-                                fi
-                            else
-                                echo "[ERROR] El archivo no existe."
+                            echo -n "Ingresa la IP o hostname objetivo: "
+                            read -r target_ip
+                            if [[ -n "$target_ip" ]]; then
+                                echo "[-] Ejecutando detección de versiones (-sV) en '$target_ip'..."
+                                sudo nmap -sV -T4 "$target_ip"
+                                log_action "Nmap: Escaneo de versiones en $target_ip"
                             fi
                             read -r "?Presiona Enter para continuar..."
                             ;;
-                        3) break ;;
+                        3)
+                            echo ""
+                            echo -n "Ingresa la IP o hostname objetivo: "
+                            read -r target_ip
+                            if [[ -n "$target_ip" ]]; then
+                                echo "[-] Ejecutando escaneo agresivo (-A) en '$target_ip'..."
+                                sudo nmap -A -T4 "$target_ip"
+                                log_action "Nmap: Escaneo agresivo en $target_ip"
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        4)
+                            echo ""
+                            echo -n "Ingresa el rango de red (ej: 192.168.1.0/24): "
+                            read -r target_net
+                            if [[ -n "$target_net" ]]; then
+                                echo "[-] Descubriendo hosts activos en '$target_net'..."
+                                nmap -sn "$target_net"
+                                log_action "Nmap: Ping scan en red $target_net"
+                            fi
+                            read -r "?Presiona Enter para continuar..."
+                            ;;
+                        5) break ;;
                     esac
                 done
                 ;;
-            8|[qQ])
+            9|[qQ])
                 echo "¡Hasta luego, Leonardo! Cerrando dashboard."
                 break
                 ;;
