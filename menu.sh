@@ -19,6 +19,19 @@ get_os_info() {
     fi
 }
 
+pause_screen() {
+    echo ""
+    echo -n "Presiona Enter para continuar..."
+    read -r
+}
+
+prompt_input() {
+    local prompt_msg="$1"
+    local var_name="$2"
+    echo -n "$prompt_msg"
+    read -r "$var_name"
+}
+
 menu() {
     while true; do
         clear
@@ -43,8 +56,7 @@ menu() {
         echo "9) Salir (o presiona 'q')"
         echo "=========================================================="
         
-        echo -n "LEO-DASHBOARD > Elige una opción [1-9 o q]: "
-        read -r opt
+        prompt_input "LEO-DASHBOARD > Elige una opción [1-9 o q]: " opt
 
         case $opt in
             1)
@@ -57,8 +69,7 @@ menu() {
                     echo "2) fzf (Buscador difuso para terminal)"
                     echo "3) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-3]: "
-                    read -r sub_opt
+                    prompt_input "Elige una opción [1-3]: " sub_opt
                     case $sub_opt in
                         1)
                             echo ""
@@ -68,14 +79,14 @@ menu() {
                                 log_action "Verificación: dnsglobe ya estaba instalado."
                             else
                                 echo "[!] dnsglobe no encontrado."
-                                read -r "inst_dns?¿Deseas instalar dnsglobe ahora vía Cargo/Script? (s/n): "
+                                prompt_input "¿Deseas instalar dnsglobe ahora vía Cargo/Script? (s/n): " inst_dns
                                 if [[ "$inst_dns" == "s" || "$inst_dns" == "S" ]]; then
                                     curl --proto '=https' --tlsv1.2 -LsSf https://github.com/514-labs/dnsglobe/releases/download/v0.3.0/dnsglobe-installer.sh | sh
                                     echo "[OK] Instalación de dnsglobe finalizada."
                                     log_action "Instalación completada: dnsglobe vía curl."
                                 fi
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2)
                             echo ""
@@ -85,7 +96,7 @@ menu() {
                                 log_action "Verificación: fzf ya estaba instalado."
                             else
                                 echo "[!] fzf no encontrado."
-                                read -r "inst_fzf?¿Deseas instalar fzf ahora? (s/n): "
+                                prompt_input "¿Deseas instalar fzf ahora? (s/n): " inst_fzf
                                 if [[ "$inst_fzf" == "s" || "$inst_fzf" == "S" ]]; then
                                     if command -v apt &> /dev/null; then
                                         sudo apt update && sudo apt install -y fzf
@@ -95,7 +106,7 @@ menu() {
                                     log_action "Instalación completada: fzf."
                                 fi
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         3) break ;;
                     esac
@@ -113,28 +124,26 @@ menu() {
                     echo "4) Explorador interactivo de carpetas pesadas (ncdu)"
                     echo "5) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-5]: "
-                    read -r sub_opt
+                    prompt_input "Elige una opción [1-5]: " sub_opt
                     case $sub_opt in
                         1)
                             echo ""
                             echo "1) btop (Monitor moderno)"
                             echo "2) htop (Monitor por procesos)"
                             echo "3) top (Monitor básico nativo)"
-                            echo -n "Selecciona monitor [1-3]: "
-                            read -r m_opt
+                            prompt_input "Selecciona monitor [1-3]: " m_opt
                             case $m_opt in
                                 1) command -v btop &> /dev/null && btop || echo "[!] btop no instalado." ;;
                                 2) command -v htop &> /dev/null && htop || echo "[!] htop no instalado." ;;
                                 3) top ;;
                             esac
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2)
                             echo ""
                             echo "[-] Resumen de almacenamiento local (df):"
                             df -h -x tmpfs -x devtmpfs
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         3)
                             echo ""
@@ -142,7 +151,7 @@ menu() {
                                 duf
                             else
                                 echo "[!] duf no está instalado."
-                                read -r "inst_duf?¿Deseas instalar duf ahora? (s/n): "
+                                prompt_input "¿Deseas instalar duf ahora? (s/n): " inst_duf
                                 if [[ "$inst_duf" == "s" || "$inst_duf" == "S" ]]; then
                                     if command -v apt &> /dev/null; then
                                         sudo apt update && sudo apt install -y duf
@@ -152,7 +161,7 @@ menu() {
                                     log_action "Instalación completada: duf."
                                 fi
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         4)
                             if command -v ncdu &> /dev/null; then
@@ -160,7 +169,7 @@ menu() {
                             else
                                 echo "[!] ncdu no está instalado."
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         5) break ;;
                     esac
@@ -174,13 +183,13 @@ menu() {
                     echo "=========================================="
                     if ! command -v docker &> /dev/null; then
                         echo "[!] Docker no está instalado en este sistema."
-                        read -r "?Presiona Enter para volver..."
+                        pause_screen
                         break
                     fi
 
                     if ! systemctl is-active --quiet docker 2>/dev/null; then
                         echo "[!] El servicio Docker no está activo en systemd."
-                        read -r "?Presiona Enter para volver..."
+                        pause_screen
                         break
                     fi
 
@@ -194,28 +203,27 @@ menu() {
                     echo "8) Mantenimiento / Limpieza (prune de contenedores e imágenes huérfanas)"
                     echo "9) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-9]: "
-                    read -r d_opt
+                    prompt_input "Elige una opción [1-9]: " d_opt
 
                     case $d_opt in
                         1)
                             echo ""
                             echo "[-] Contenedores en ejecución:"
                             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2)
                             echo ""
                             echo "[-] Listado completo de contenedores:"
                             docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         3)
                             echo ""
                             echo "[-] Monitoreo en vivo de consumo de CPU/RAM/RED (Ctrl+C para salir):"
                             sleep 1
                             docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         4)
                             echo ""
@@ -223,8 +231,7 @@ menu() {
                             if command -v fzf &> /dev/null; then
                                 target_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor para ver logs > ")
                             else
-                                echo -n "Nombre del contenedor: "
-                                read -r target_cnt
+                                prompt_input "Nombre del contenedor: " target_cnt
                             fi
 
                             if [[ -n "$target_cnt" ]]; then
@@ -234,7 +241,7 @@ menu() {
                                 docker logs -f --tail 50 "$target_cnt"
                                 log_action "Docker: Consulta de logs en $target_cnt."
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         5)
                             echo ""
@@ -242,8 +249,7 @@ menu() {
                             if command -v fzf &> /dev/null; then
                                 action_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor a gestionar > ")
                             else
-                                echo -n "Nombre del contenedor: "
-                                read -r action_cnt
+                                prompt_input "Nombre del contenedor: " action_cnt
                             fi
 
                             if [[ -n "$action_cnt" ]]; then
@@ -252,15 +258,14 @@ menu() {
                                 echo "1) Reiniciar (restart)"
                                 echo "2) Detener (stop)"
                                 echo "3) Iniciar (start)"
-                                echo -n "Selecciona acción [1-3]: "
-                                read -r act_choice
+                                prompt_input "Selecciona acción [1-3]: " act_choice
                                 case $act_choice in
                                     1) sudo docker restart "$action_cnt" && log_action "Docker: Restart $action_cnt" ;;
                                     2) sudo docker stop "$action_cnt" && log_action "Docker: Stop $action_cnt" ;;
                                     3) sudo docker start "$action_cnt" && log_action "Docker: Start $action_cnt" ;;
                                 esac
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         6)
                             echo ""
@@ -268,8 +273,7 @@ menu() {
                             if command -v fzf &> /dev/null; then
                                 inspect_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor a inspeccionar > ")
                             else
-                                echo -n "Nombre del contenedor: "
-                                read -r inspect_cnt
+                                prompt_input "Nombre del contenedor: " inspect_cnt
                             fi
 
                             if [[ -n "$inspect_cnt" ]]; then
@@ -277,7 +281,7 @@ menu() {
                                 echo "[-] IP y Redes asignadas a '$inspect_cnt':"
                                 docker inspect --format '{{range .NetworkSettings.Networks}}IP: {{.IPAddress}} | Gateway: {{.Gateway}} {{end}}' "$inspect_cnt"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         7)
                             echo ""
@@ -287,17 +291,17 @@ menu() {
                             echo "[-] Uso global de recursos de Docker:"
                             docker system df
                             log_action "Docker: Consulta de espacio e imágenes."
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         8)
                             echo ""
                             echo "[!] Limpieza de elementos en desuso en Docker..."
-                            read -r "confirm_prune?¿Deseas ejecutar 'docker system prune -f'? (s/n): "
+                            prompt_input "¿Deseas ejecutar 'docker system prune -f'? (s/n): " confirm_prune
                             if [[ "$confirm_prune" == "s" || "$confirm_prune" == "S" ]]; then
                                 sudo docker system prune -f
                                 log_action "Docker: Executed docker system prune."
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         9) break ;;
                     esac
@@ -313,8 +317,7 @@ menu() {
                     echo "2) Sincronizar repositorio de scripts (Git Pull/Push)"
                     echo "3) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-3]: "
-                    read -r sub_opt
+                    prompt_input "Elige una opción [1-3]: " sub_opt
                     case $sub_opt in
                         1)
                             local update_date=$(date +'%Y%m%d_%H%M%S')
@@ -330,12 +333,12 @@ menu() {
                                 { sudo dnf upgrade -y --skip-broken --nobest && sudo dnf autoremove -y; } > "$update_log" 2>&1
                             fi
                             echo "[OK] Proceso finalizado."
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2)
                             cd ~/.local/bin/scripts || exit 1
                             git pull
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         3) break ;;
                     esac
@@ -350,14 +353,13 @@ menu() {
                     echo "1) Clima actual (wttr.in)"
                     echo "2) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-2]: "
-                    read -r sub_opt
+                    prompt_input "Elige una opción [1-2]: " sub_opt
                     case $sub_opt in
                         1)
                             echo ""
                             echo "[-] Consultando wttr.in..."
                             curl -s "wttr.in?lang=es"
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2) break ;;
                     esac
@@ -373,8 +375,7 @@ menu() {
                     echo "2) Diagnóstico / Instalación de Terraform"
                     echo "3) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-3]: "
-                    read -r auto_opt
+                    prompt_input "Elige una opción [1-3]: " auto_opt
 
                     case $auto_opt in
                         1)
@@ -399,7 +400,7 @@ menu() {
                             else
                                 echo "[STATUS] : NO INSTALADO"
                                 echo ""
-                                read -r "inst_ansible?¿Deseas instalar Ansible ahora? (s/n): "
+                                prompt_input "¿Deseas instalar Ansible ahora? (s/n): " inst_ansible
                                 if [[ "$inst_ansible" == "s" || "$inst_ansible" == "S" ]]; then
                                     echo "[-] Instalando Ansible..."
                                     if command -v apt &> /dev/null; then
@@ -411,8 +412,7 @@ menu() {
                                 fi
                             fi
                             log_action "Diagnóstico Ansible ejecutado."
-                            echo ""
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2)
                             echo ""
@@ -434,7 +434,7 @@ menu() {
                             else
                                 echo "[STATUS] : NO INSTALADO"
                                 echo ""
-                                read -r "inst_tf?¿Deseas instalar Terraform (HashiCorp Repo) ahora? (s/n): "
+                                prompt_input "¿Deseas instalar Terraform (HashiCorp Repo) ahora? (s/n): " inst_tf
                                 if [[ "$inst_tf" == "s" || "$inst_tf" == "S" ]]; then
                                     echo "[-] Configurando repositorio oficial e instalando Terraform..."
                                     if command -v dnf &> /dev/null; then
@@ -450,8 +450,7 @@ menu() {
                                 fi
                             fi
                             log_action "Diagnóstico Terraform ejecutado."
-                            echo ""
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         3) break ;;
                     esac
@@ -470,8 +469,7 @@ menu() {
                     echo "5) Puertos locales escuchando en el sistema (ss -tulpn)"
                     echo "6) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-6]: "
-                    read -r net_opt
+                    prompt_input "Elige una opción [1-6]: " net_opt
 
                     case $net_opt in
                         1)
@@ -481,23 +479,21 @@ menu() {
                             echo ""
                             echo "[-] Tabla de ruteo por defecto:"
                             ip route
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2)
                             echo ""
-                            echo -n "Ingresa la IP o Dominio a probar (ej: 8.8.8.8 o google.com): "
-                            read -r ping_target
+                            prompt_input "Ingresa la IP o Dominio a probar (ej: 8.8.8.8 o google.com): " ping_target
                             if [[ -n "$ping_target" ]]; then
                                 echo "[-] Enviando 4 paquetes ICMP a '$ping_target'..."
                                 ping -c 4 "$ping_target"
                                 log_action "Red: Ping ejecutado hacia $ping_target"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         3)
                             echo ""
-                            echo -n "Ingresa la IP o Dominio a trazar: "
-                            read -r trace_target
+                            prompt_input "Ingresa la IP o Dominio a trazar: " trace_target
                             if [[ -n "$trace_target" ]]; then
                                 if command -v traceroute &> /dev/null; then
                                     traceroute "$trace_target"
@@ -508,24 +504,23 @@ menu() {
                                 fi
                                 log_action "Red: Traceroute a $trace_target"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         4)
                             echo ""
-                            echo -n "Ingresa la URL objetivo (ej: https://google.com): "
-                            read -r curl_target
+                            prompt_input "Ingresa la URL objetivo (ej: https://google.com): " curl_target
                             if [[ -n "$curl_target" ]]; then
                                 echo "[-] Obteniendo cabeceras HTTP y código de respuesta..."
                                 curl -I -L -s "$curl_target" | head -n 20
                                 log_action "Red: Curl cabeceras en $curl_target"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         5)
                             echo ""
                             echo "[-] Puertos TCP/UDP en escucha activa:"
                             sudo ss -tulpn | grep LISTEN
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         6) break ;;
                     esac
@@ -541,7 +536,7 @@ menu() {
                     if ! command -v nmap &> /dev/null; then
                         echo "[!] nmap no está instalado en este sistema."
                         echo ""
-                        read -r "inst_nmap?¿Deseas instalar nmap ahora? (s/n): "
+                        prompt_input "¿Deseas instalar nmap ahora? (s/n): " inst_nmap
                         if [[ "$inst_nmap" == "s" || "$inst_nmap" == "S" ]]; then
                             echo "[-] Instalando nmap..."
                             if command -v apt &> /dev/null; then
@@ -551,7 +546,7 @@ menu() {
                             fi
                             log_action "Instalación completada: nmap."
                         else
-                            read -r "?Presiona Enter para volver..."
+                            pause_screen
                             break
                         fi
                     fi
@@ -568,53 +563,48 @@ menu() {
                     echo "4) Escaneo de red local (descubrimiento de hosts activos)"
                     echo "5) Volver al menú principal"
                     echo "=========================================="
-                    echo -n "Elige una opción [1-5]: "
-                    read -r nmap_opt
+                    prompt_input "Elige una opción [1-5]: " nmap_opt
 
                     case $nmap_opt in
                         1)
                             echo ""
-                            echo -n "Ingresa la IP o hostname objetivo: "
-                            read -r target_ip
+                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
                             if [[ -n "$target_ip" ]]; then
                                 echo "[-] Ejecutando escaneo rápido en '$target_ip'..."
                                 nmap -T4 "$target_ip"
                                 log_action "Nmap: Escaneo rápido en $target_ip"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         2)
                             echo ""
-                            echo -n "Ingresa la IP o hostname objetivo: "
-                            read -r target_ip
+                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
                             if [[ -n "$target_ip" ]]; then
                                 echo "[-] Ejecutando detección de versiones (-sV) en '$target_ip'..."
                                 sudo nmap -sV -T4 "$target_ip"
                                 log_action "Nmap: Escaneo de versiones en $target_ip"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         3)
                             echo ""
-                            echo -n "Ingresa la IP o hostname objetivo: "
-                            read -r target_ip
+                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
                             if [[ -n "$target_ip" ]]; then
                                 echo "[-] Ejecutando escaneo agresivo (-A) en '$target_ip'..."
                                 sudo nmap -A -T4 "$target_ip"
                                 log_action "Nmap: Escaneo agresivo en $target_ip"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         4)
                             echo ""
-                            echo -n "Ingresa el rango de red (ej: 192.168.1.0/24): "
-                            read -r target_net
+                            prompt_input "Ingresa el rango de red (ej: 192.168.1.0/24): " target_net
                             if [[ -n "$target_net" ]]; then
                                 echo "[-] Descubriendo hosts activos en '$target_net'..."
                                 nmap -sn "$target_net"
                                 log_action "Nmap: Ping scan en red $target_net"
                             fi
-                            read -r "?Presiona Enter para continuar..."
+                            pause_screen
                             ;;
                         5) break ;;
                     esac
