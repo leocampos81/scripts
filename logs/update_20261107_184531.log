@@ -1,0 +1,26 @@
+Última comprobación de caducidad de metadatos hecha hace 2:18:06, el sáb 07 nov 2026 16:27:31.
+Dependencias resueltas.
+
+ Problema: cannot install the best update candidate for package fluent-bit-5.0.8-1.x86_64
+  - nothing provides libcrypto.so.1.1()(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libcrypto.so.1.1(OPENSSL_1_1_0)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libssl.so.1.1()(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libssl.so.1.1(OPENSSL_1_1_0)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libcrypto.so.1.1(OPENSSL_1_1_1)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libssl.so.1.1(OPENSSL_1_1_1)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+================================================================================
+ Paquete            Arquitectura   Versión         Repositorio             Tam.
+================================================================================
+Descartando paquetes con conflictos en las dependencias:
+ fluent-bit         x86_64         5.1.5-1         newrelic-infra         9.8 M
+
+Resumen de la transacción
+================================================================================
+Descartar  1 Paquete
+
+Nada por hacer.
+¡Listo!
+Última comprobación de caducidad de metadatos hecha hace 2:18:10, el sáb 07 nov 2026 16:27:31.
+Dependencias resueltas.
+Nada por hacer.
+¡Listo!

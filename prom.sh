@@ -749,3 +749,4 @@ menu() {
         esac
     done
 }
+menu
