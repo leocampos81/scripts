@@ -43,7 +43,7 @@ menu() {
         clear
         echo "╔══════════════════════════════════════════════════════════════════╗"
         echo "║                                                                  ║"
-        echo "║                  P R O M E T H E R I O N  2 1 1 2                ║"
+        echo "║                  P R O M E T H E R I O N  2 1 1 2                  ║"
         echo "║                 S Y S A D M I N   D A S H B O A R D              ║"
         echo "║                                                                  ║"
         echo "╚══════════════════════════════════════════════════════════════════╝"
@@ -51,13 +51,13 @@ menu() {
         echo "[*] Usuario Activo : $USER@$(hostname)"
         echo "[*] Servidor actual: $sistema_actual"
         echo "=========================================================="
-        echo "1) Herramientas de sistema nativas (grep, rsync, diff, etc.)"
-        echo "2) Monitoreo de recursos locales y disco (btop, duf, ncdu)"
+        echo "1) Herramientas de sistema nativas (grep, rsync, diff, journalctl)"
+        echo "2) Monitoreo de recursos locales y disco (btop, ps top CPU/RAM)"
         echo "3) Servicios y Contenedores Docker (Avanzado)"
         echo "4) Mantenimiento de Sistema y Sincronización Git"
         echo "5) Utilidades Varias (Clima wttr.in, etc.)"
         echo "6) Herramientas de Automatización (Ansible, Terraform)"
-        echo "7) Diagnóstico y Pruebas de Red (IP, Ping, Traceroute, Curl)"
+        echo "7) Diagnóstico y Pruebas de Red (IP, Ping, DNS, Curl, SS)"
         echo "8) Auditoría de Red y Seguridad (Nmap)"
         echo "9) Salir (o presiona 'q')"
         echo "=========================================================="
@@ -72,13 +72,14 @@ menu() {
                     echo "     HERRAMIENTAS DE SISTEMA NATIVAS"
                     echo "=========================================="
                     echo "1) Análisis de logs y búsqueda (grep / egrep)"
-                    echo "2) Conteo de líneas, palabras y bytes (wc)"
-                    echo "3) Comparación de archivos y diferencias (diff)"
-                    echo "4) Sincronización y respaldo rápido (rsync)"
-                    echo "5) Resumen de espacio en disco (df -h)"
-                    echo "6) Volver al menú principal"
+                    echo "2) Inspección de servicios y logs del sistema (journalctl)"
+                    echo "3) Conteo de líneas, palabras y bytes (wc)"
+                    echo "4) Comparación de archivos y diferencias (diff)"
+                    echo "5) Sincronización y respaldo rápido (rsync)"
+                    echo "6) Resumen de espacio en disco (df -h)"
+                    echo "7) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-6]: " nat_opt
+                    prompt_input "Elige una opción [1-7]: " nat_opt
 
                     case $nat_opt in
                         1)
@@ -101,6 +102,19 @@ menu() {
                             ;;
                         2)
                             echo ""
+                            echo "=========================================="
+                            echo "       INSPECCIÓN CON JOURNALCTL"
+                            echo "=========================================="
+                            prompt_input "Nombre del servicio a consultar (ej: sshd, nginx, docker): " svc_name
+                            if [[ -n "$svc_name" ]]; then
+                                echo "[-] Mostrando últimas 30 líneas de registro para '$svc_name':"
+                                journalctl -u "$svc_name" -n 30 --no-pager
+                                log_action "Journalctl: Consulta de servicio $svc_name"
+                            fi
+                            pause_screen
+                            ;;
+                        3)
+                            echo ""
                             prompt_input "Ruta del archivo a contar (wc): " wc_file
                             if [[ -f "$wc_file" ]]; then
                                 echo "[-] Métricas del archivo (Líneas / Palabras / Bytes):"
@@ -110,7 +124,7 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        3)
+                        4)
                             echo ""
                             prompt_input "Ruta del Archivo 1: " f1
                             prompt_input "Ruta del Archivo 2: " f2
@@ -122,7 +136,7 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        4)
+                        5)
                             echo ""
                             echo "=========================================="
                             echo "      SINCRONIZACIÓN CON RSYNC"
@@ -136,13 +150,13 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        5)
+                        6)
                             echo ""
                             echo "[-] Resumen de discos (df -h):"
                             df -h -x tmpfs -x devtmpfs
                             pause_screen
                             ;;
-                        6) break ;;
+                        7) break ;;
                     esac
                 done
                 ;;
@@ -152,13 +166,15 @@ menu() {
                     echo "=========================================="
                     echo "   MONITOREO DE RECURSOS LOCALES Y DISCO"
                     echo "=========================================="
-                    echo "1) Monitores de procesos (btop / htop / top)"
-                    echo "2) Diagnóstico de disco tradicional (df -h)"
-                    echo "3) Visualizador visual de almacenamiento (duf)"
-                    echo "4) Explorador interactivo de carpetas pesadas (ncdu)"
-                    echo "5) Volver al menú principal"
+                    echo "1) Monitores interactivos de procesos (btop / htop / top)"
+                    echo "2) Top procesos con mayor consumo de CPU (ps)"
+                    echo "3) Top procesos con mayor consumo de Memoria (ps)"
+                    echo "4) Diagnóstico tradicional de disco (df -h)"
+                    echo "5) Visualizador visual de almacenamiento (duf)"
+                    echo "6) Explorador interactivo de carpetas pesadas (ncdu)"
+                    echo "7) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-5]: " sub_opt
+                    prompt_input "Elige una opción [1-7]: " sub_opt
                     case $sub_opt in
                         1)
                             echo ""
@@ -175,11 +191,25 @@ menu() {
                             ;;
                         2)
                             echo ""
+                            echo "[-] Top 10 procesos consumiendo más CPU:"
+                            ps aux --sort=-%cpu | head -n 11
+                            log_action "Monitoreo: Top procesos por CPU ejecutado."
+                            pause_screen
+                            ;;
+                        3)
+                            echo ""
+                            echo "[-] Top 10 procesos consumiendo más Memoria:"
+                            ps aux --sort=-%mem | head -n 11
+                            log_action "Monitoreo: Top procesos por Memoria ejecutado."
+                            pause_screen
+                            ;;
+                        4)
+                            echo ""
                             echo "[-] Resumen de almacenamiento local (df):"
                             df -h -x tmpfs -x devtmpfs
                             pause_screen
                             ;;
-                        3)
+                        5)
                             echo ""
                             if command -v duf &> /dev/null; then
                                 duf
@@ -197,7 +227,7 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        4)
+                        6)
                             if command -v ncdu &> /dev/null; then
                                 ncdu /
                             else
@@ -205,7 +235,7 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        5) break ;;
+                        7) break ;;
                     esac
                 done
                 ;;
@@ -500,10 +530,11 @@ menu() {
                     echo "2) Prueba de latencia y conectividad (ping)"
                     echo "3) Trazado de ruta hacia host/IP (traceroute / tracepath)"
                     echo "4) Diagnóstico HTTP/HTTPS y cabeceras (curl)"
-                    echo "5) Puertos locales escuchando en el sistema (ss -tulpn)"
-                    echo "6) Volver al menú principal"
+                    echo "5) Verificación y resolución DNS (nslookup / dig / resolv.conf)"
+                    echo "6) Puertos locales escuchando en el sistema (ss -tulpn)"
+                    echo "7) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-6]: " net_opt
+                    prompt_input "Elige una opción [1-7]: " net_opt
 
                     case $net_opt in
                         1)
@@ -552,11 +583,29 @@ menu() {
                             ;;
                         5)
                             echo ""
+                            echo "[-] Servidores DNS configurados (/etc/resolv.conf):"
+                            cat /etc/resolv.conf | grep nameserver
+                            echo ""
+                            prompt_input "Ingresa un dominio a resolver (ej: google.com): " dns_target
+                            if [[ -n "$dns_target" ]]; then
+                                if command -v dig &> /dev/null; then
+                                    dig +short "$dns_target"
+                                elif command -v nslookup &> /dev/null; then
+                                    nslookup "$dns_target"
+                                else
+                                    getent ahosts "$dns_target"
+                                fi
+                                log_action "Red: Consulta DNS de $dns_target"
+                            fi
+                            pause_screen
+                            ;;
+                        6)
+                            echo ""
                             echo "[-] Puertos TCP/UDP en escucha activa:"
                             sudo ss -tulpn | grep LISTEN
                             pause_screen
                             ;;
-                        6) break ;;
+                        7) break ;;
                     esac
                 done
                 ;;
