@@ -43,7 +43,7 @@ menu() {
         clear
         echo "╔══════════════════════════════════════════════════════════════════╗"
         echo "║                                                                  ║"
-        echo "║                  P R O M E T H E R I O N  2 1 1 2                  ║"
+        echo "║                  P R O M E T H E R I O N  2 1 1 2                ║"
         echo "║                 S Y S A D M I N   D A S H B O A R D              ║"
         echo "║                                                                  ║"
         echo "╚══════════════════════════════════════════════════════════════════╝"
@@ -371,7 +371,7 @@ menu() {
                     esac
                 done
                 ;;
-            4)
+	4)
                 while true; do
                     clear
                     echo "=========================================="
@@ -400,15 +400,64 @@ menu() {
                             pause_screen
                             ;;
                         2)
+                            echo ""
+                            echo "=========================================="
+                            echo "      SINCRONIZACIÓN GIT INTERACTIVA"
+                            echo "=========================================="
+                            echo "Directorio actual: $HOME/.local/bin/scripts"
                             cd ~/.local/bin/scripts || exit 1
-                            git pull
+                            
+                            echo ""
+                            echo "Estado actual del repositorio:"
+                            git status -s
+                            echo ""
+                            echo "1) git pull (Descargar y fusionar cambios remotos)"
+                            echo "2) git push (Subir cambios locales al repositorio)"
+                            echo "3) Cancelar y volver"
+                            prompt_input "Elige la acción Git [1-3]: " git_action
+
+                            case $git_action in
+                                1)
+                                    echo ""
+                                    echo "[-] Iniciando 'git pull origin main'..."
+                                    if git pull origin main; then
+                                        echo "[OK] Repositorio actualizado exitosamente."
+                                        log_action "Git: Pull ejecutado con éxito."
+                                    else
+                                        echo "[!] Ocurrió un conflicto o error al realizar el pull."
+                                    fi
+                                    ;;
+                                2)
+                                    echo ""
+                                    echo "[-] Preparando subida al repositorio remoto..."
+                                    prompt_input "Ingresa el mensaje para el commit (ej: 'Actualiza menu.sh'): " git_msg
+                                    if [[ -n "$git_msg" ]]; then
+                                        echo "[-] Agregando archivos modificados (git add .)..."
+                                        git add .
+                                        echo "[-] Generando commit..."
+                                        git commit -m "$git_msg"
+                                        echo "[-] Ejecutando 'git push origin main'..."
+                                        if git push origin main; then
+                                            echo "[OK] Cambios subidos y sincronizados correctamente."
+                                            log_action "Git: Push ejecutado con mensaje: '$git_msg'"
+                                        else
+                                            echo "[!] Error al subir los cambios al repositorio remoto."
+                                        fi
+                                    else
+                                        echo "[!] Operación cancelada: el mensaje de commit no puede estar vacío."
+                                    fi
+                                    ;;
+                                3)
+                                    echo "[i] Operación Git cancelada."
+                                    ;;
+                            esac
                             pause_screen
                             ;;
                         3) break ;;
                     esac
                 done
                 ;;
-            5)
+	5)
                 while true; do
                     clear
                     echo "=========================================="

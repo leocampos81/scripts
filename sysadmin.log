@@ -23,3 +23,56 @@
 [2026-11-04 19:47:30] Consulta de todos los contenedores realizada.
 [2026-11-04 19:47:47] Verificación de logs para contenedor: node-exporter
 [2026-11-04 19:47:53] Consulta de espacio e imágenes Docker realizada.
+[2026-11-04 22:11:18] Instalación completada: dnsglobe vía curl.
+[2026-11-04 22:11:25] Instalación completada: dnsglobe vía curl.
+[2026-11-04 22:18:10] Instalación completada: ncdu.
+[2026-11-04 23:12:02] Mantenimiento del sistema iniciado.
+[2026-11-04 23:12:08] Mantenimiento completado vía dnf.
+[2026-11-04 23:38:18] Mantenimiento del sistema iniciado.
+[2026-11-04 23:38:23] Mantenimiento completado vía dnf.
+[2026-11-04 23:49:26] Mantenimiento del sistema iniciado.
+[2026-11-04 23:54:05] Mantenimiento completado vía dnf con omisión de conflictos. Log: /home/leonardo/.local/bin/scripts/logs/update_20261104_234926.log
+[2026-11-05 01:40:35] Diagnóstico Ansible ejecutado.
+[2026-11-05 01:41:00] Diagnóstico Terraform ejecutado.
+[2026-11-05 11:29:15] Instalación completada: dnsglobe vía curl.
+[2026-11-05 11:29:26] Instalación completada: dnsglobe vía curl.
+[2026-11-05 11:29:52] Instalación completada: fzf.
+[2026-11-05 11:31:33] Verificación: fzf ya estaba instalado.
+[2026-11-05 11:31:42] Verificación: fzf ya estaba instalado.
+[2026-11-05 11:31:53] Verificación: fzf ya estaba instalado.
+[2026-11-05 11:32:20] Diagnóstico Ansible ejecutado.
+[2026-11-05 11:32:23] Diagnóstico Terraform ejecutado.
+[2026-11-05 11:34:57] Diagnóstico Terraform ejecutado.
+[2026-11-05 11:48:36] Diagnóstico Terraform ejecutado.
+[2026-11-05 11:58:17] Diagnóstico Ansible ejecutado.
+[2026-11-05 11:59:31] Diagnóstico Terraform ejecutado.
+[2026-11-05 12:00:36] Instalación completada: dnsglobe vía curl.
+[2026-11-05 12:00:45] Instalación completada: dnsglobe vía curl.
+[2026-11-05 12:01:03] Instalación completada: dnsglobe vía curl.
+[2026-11-05 21:07:02] Red: Ping ejecutado hacia 1.1.1.1
+[2026-11-05 21:07:09] Red: Traceroute a www.d
+[2026-11-05 21:07:42] Red: Traceroute a www.sonarfm.cl
+[2026-11-05 21:09:51] Red: Curl cabeceras en www.sonarfm.cl
+[2026-11-05 21:12:21] Diagnóstico Ansible ejecutado.
+[2026-11-05 21:12:28] Diagnóstico Terraform ejecutado.
+[2026-11-05 22:19:52] Nmap: Escaneo rápido en 192.168.10q
+[2026-11-05 22:22:28] Verificación: dnsglobe ya estaba instalado.
+[2026-11-05 22:51:10] Nmap: Escaneo rápido en 192.168.1.108
+[2026-11-05 22:53:42] Nmap: Escaneo de versiones en 192.168.1.108
+[2026-11-05 22:59:09] Nmap: Escaneo agresivo en 192.168.1.108
+[2026-11-05 23:55:11] Instalación completada: eza.
+[2026-11-05 23:55:24] Instalación completada: atuin.
+[2026-11-06 00:19:08] Grep: Búsqueda de 'ERROR' en /var/log/dnf.log
+[2026-11-06 12:23:14] Grep: Búsqueda de 'FAIL' en /home/leonardo/.local/bin/scripts/logs/update_20261106_121601.log
+[2026-11-06 19:34:52] Nmap: Escaneo de versiones en www.sonarfm.cl
+[2026-11-07 15:52:07] Diagnóstico Ansible ejecutado.
+[2026-11-07 15:52:11] Diagnóstico Terraform ejecutado.
+[2026-11-07 15:52:26] Red: Ping ejecutado hacia www.sonarfm.cl
+[2026-11-07 15:52:34] Red: Curl cabeceras en www.sonarfm.cl
+[2026-11-07 15:57:45] Red: Consulta DNS de sonarfm.cl
+[2026-11-07 15:58:38] Red: Traceroute a sonarfm.cl
+[2026-11-07 15:59:08] Journalctl: Consulta de servicio sshd
+[2026-11-07 15:59:16] Journalctl: Consulta de servicio nginx
+[2026-11-07 15:59:22] Journalctl: Consulta de servicio docker
+[2026-11-07 16:01:18] Monitoreo: Top procesos por CPU ejecutado.
+[2026-11-07 16:01:26] Monitoreo: Top procesos por Memoria ejecutado.

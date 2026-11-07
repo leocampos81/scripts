@@ -1,0 +1,232 @@
+=== INICIO ACTUALIZACIÓN DNF - mié 04 nov 2026 23:49:26 -03 ===
+Última comprobación de caducidad de metadatos hecha hace 3:32:33, el mié 04 nov 2026 20:18:19.
+Dependencias resueltas.
+
+ Problema: cannot install the best update candidate for package fluent-bit-5.0.8-1.x86_64
+  - nothing provides libcrypto.so.1.1()(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libcrypto.so.1.1(OPENSSL_1_1_0)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libssl.so.1.1()(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libssl.so.1.1(OPENSSL_1_1_0)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libcrypto.so.1.1(OPENSSL_1_1_1)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+  - nothing provides libssl.so.1.1(OPENSSL_1_1_1)(64bit) needed by fluent-bit-5.1.5-1.x86_64 from newrelic-infra
+================================================================================
+ Paquete                     Arq.   Versión                Repositorio     Tam.
+================================================================================
+Instalando:
+ kernel                      x86_64 6.12.0-211.73.1.el10_2 baseos         1.7 M
+ kernel-core                 x86_64 6.12.0-211.73.1.el10_2 baseos          19 M
+ kernel-modules              x86_64 6.12.0-211.73.1.el10_2 baseos          42 M
+ kernel-modules-core         x86_64 6.12.0-211.73.1.el10_2 baseos          30 M
+ kernel-modules-extra        x86_64 6.12.0-211.73.1.el10_2 baseos         3.2 M
+Actualizando:
+ kernel-headers              x86_64 6.12.0-211.73.1.el10_2 appstream      3.4 M
+ kernel-modules-extra-matched
+                             x86_64 6.12.0-211.73.1.el10_2 baseos         1.7 M
+ kernel-tools                x86_64 6.12.0-211.73.1.el10_2 baseos         2.3 M
+ kernel-tools-libs           x86_64 6.12.0-211.73.1.el10_2 baseos         1.7 M
+ libblkid                    x86_64 2.40.2-18.el10_2.20    baseos         124 k
+ libfdisk                    x86_64 2.40.2-18.el10_2.20    baseos         160 k
+ libmount                    x86_64 2.40.2-18.el10_2.20    baseos         157 k
+ libsmartcols                x86_64 2.40.2-18.el10_2.20    baseos          83 k
+ libuuid                     x86_64 2.40.2-18.el10_2.20    baseos          28 k
+ newrelic-infra              x86_64 2.0.1-1.el8            newrelic-infra  59 M
+ util-linux                  x86_64 2.40.2-18.el10_2.20    baseos         1.2 M
+ util-linux-core             x86_64 2.40.2-18.el10_2.20    baseos         523 k
+Eliminando:
+ kernel                      x86_64 6.12.0-211.66.1.el10_2 @baseos          0  
+ kernel-core                 x86_64 6.12.0-211.66.1.el10_2 @baseos         70 M
+ kernel-modules              x86_64 6.12.0-211.66.1.el10_2 @baseos         39 M
+ kernel-modules-core         x86_64 6.12.0-211.66.1.el10_2 @baseos         28 M
+ kernel-modules-extra        x86_64 6.12.0-211.66.1.el10_2 @baseos        1.4 M
+Descartando paquetes con conflictos en las dependencias:
+ fluent-bit                  x86_64 5.1.5-1                newrelic-infra 9.8 M
+
+Resumen de la transacción
+================================================================================
+Instalar     5 Paquetes
+Actualizar  12 Paquetes
+Eliminar     5 Paquetes
+Descartar    1 Paquete
+
+Tamaño total de la descarga: 166 M
+Descargando paquetes:
+[MIRROR] kernel-6.12.0-211.73.1.el10_2.x86_64.rpm: Status code: 404 for https://rocky-linux-southamerica-west1.production.gcp.mirrors.ctrliq.cloud/pub/rocky//10.2/BaseOS/x86_64/os/Packages/k/kernel-6.12.0-211.73.1.el10_2.x86_64.rpm (IP: 34.102.142.33)
+[MIRROR] kernel-core-6.12.0-211.73.1.el10_2.x86_64.rpm: Status code: 404 for https://rocky-linux-southamerica-west1.production.gcp.mirrors.ctrliq.cloud/pub/rocky//10.2/BaseOS/x86_64/os/Packages/k/kernel-core-6.12.0-211.73.1.el10_2.x86_64.rpm (IP: 34.102.142.33)
+[MIRROR] kernel-modules-6.12.0-211.73.1.el10_2.x86_64.rpm: Status code: 404 for https://rocky-linux-southamerica-west1.production.gcp.mirrors.ctrliq.cloud/pub/rocky//10.2/BaseOS/x86_64/os/Packages/k/kernel-modules-6.12.0-211.73.1.el10_2.x86_64.rpm (IP: 34.102.142.33)
+(1/17): kernel-6.12.0-211.73.1.el10_2.x86_64.rp 5.1 MB/s | 1.7 MB     00:00    
+(2/17): kernel-core-6.12.0-211.73.1.el10_2.x86_  13 MB/s |  19 MB     00:01    
+(3/17): kernel-modules-core-6.12.0-211.73.1.el1  21 MB/s |  30 MB     00:01    
+(4/17): kernel-modules-extra-6.12.0-211.73.1.el 7.0 MB/s | 3.2 MB     00:00    
+(5/17): kernel-modules-extra-matched-6.12.0-211  16 MB/s | 1.7 MB     00:00    
+(6/17): kernel-tools-6.12.0-211.73.1.el10_2.x86  15 MB/s | 2.3 MB     00:00    
+(7/17): kernel-tools-libs-6.12.0-211.73.1.el10_  17 MB/s | 1.7 MB     00:00    
+(8/17): libblkid-2.40.2-18.el10_2.20.x86_64.rpm 7.0 MB/s | 124 kB     00:00    
+(9/17): libfdisk-2.40.2-18.el10_2.20.x86_64.rpm 9.5 MB/s | 160 kB     00:00    
+(10/17): libmount-2.40.2-18.el10_2.20.x86_64.rp  12 MB/s | 157 kB     00:00    
+(11/17): libsmartcols-2.40.2-18.el10_2.20.x86_6 6.2 MB/s |  83 kB     00:00    
+(12/17): libuuid-2.40.2-18.el10_2.20.x86_64.rpm 2.9 MB/s |  28 kB     00:00    
+(13/17): util-linux-2.40.2-18.el10_2.20.x86_64.  18 MB/s | 1.2 MB     00:00    
+(14/17): util-linux-core-2.40.2-18.el10_2.20.x8  16 MB/s | 523 kB     00:00    
+(15/17): kernel-modules-6.12.0-211.73.1.el10_2.  15 MB/s |  42 MB     00:02    
+(16/17): kernel-headers-6.12.0-211.73.1.el10_2. 7.4 MB/s | 3.4 MB     00:00    
+(17/17): newrelic-infra-2.0.1-1.el8.x86_64.rpm   18 MB/s |  59 MB     00:03    
+--------------------------------------------------------------------------------
+Total                                            28 MB/s | 166 MB     00:05     
+Ejecutando verificación de operación
+Verificación de operación exitosa.
+Ejecutando prueba de operaciones
+Prueba de operación exitosa.
+Ejecutando operación
+  Preparando          :                                                     1/1 
+  Actualizando        : libuuid-2.40.2-18.el10_2.20.x86_64                 1/34 
+  Actualizando        : libblkid-2.40.2-18.el10_2.20.x86_64                2/34 
+  Instalando          : kernel-modules-core-6.12.0-211.73.1.el10_2.x86_    3/34 
+  Instalando          : kernel-core-6.12.0-211.73.1.el10_2.x86_64          4/34 
+  Ejecutando scriptlet: kernel-core-6.12.0-211.73.1.el10_2.x86_64          4/34 
+  Instalando          : kernel-modules-6.12.0-211.73.1.el10_2.x86_64       5/34 
+  Ejecutando scriptlet: kernel-modules-6.12.0-211.73.1.el10_2.x86_64       5/34 
+  Actualizando        : libmount-2.40.2-18.el10_2.20.x86_64                6/34 
+  Actualizando        : libsmartcols-2.40.2-18.el10_2.20.x86_64            7/34 
+  Actualizando        : util-linux-core-2.40.2-18.el10_2.20.x86_64         8/34 
+  Instalando          : kernel-modules-extra-6.12.0-211.73.1.el10_2.x86    9/34 
+  Ejecutando scriptlet: kernel-modules-extra-6.12.0-211.73.1.el10_2.x86    9/34 
+  Actualizando        : libfdisk-2.40.2-18.el10_2.20.x86_64               10/34 
+  Actualizando        : kernel-tools-libs-6.12.0-211.73.1.el10_2.x86_64   11/34 
+  Ejecutando scriptlet: kernel-tools-libs-6.12.0-211.73.1.el10_2.x86_64   11/34 
+  Actualizando        : kernel-tools-6.12.0-211.73.1.el10_2.x86_64        12/34 
+  Actualizando        : util-linux-2.40.2-18.el10_2.20.x86_64             13/34 
+  Ejecutando scriptlet: util-linux-2.40.2-18.el10_2.20.x86_64             13/34 
+  Instalando          : kernel-6.12.0-211.73.1.el10_2.x86_64              14/34 
+  Actualizando        : kernel-headers-6.12.0-211.73.1.el10_2.x86_64      15/34 
+  Actualizando        : kernel-modules-extra-matched-6.12.0-211.73.1.el   16/34 
+  Ejecutando scriptlet: newrelic-infra-2.0.1-1.el8.x86_64                 17/34 
+  Actualizando        : newrelic-infra-2.0.1-1.el8.x86_64                 17/34 
+  Eliminando          : kernel-6.12.0-211.66.1.el10_2.x86_64              18/34 
+  Eliminando          : kernel-modules-extra-6.12.0-211.66.1.el10_2.x86   19/34 
+  Ejecutando scriptlet: kernel-modules-extra-6.12.0-211.66.1.el10_2.x86   19/34 
+  Eliminando          : kernel-modules-6.12.0-211.66.1.el10_2.x86_64      20/34 
+  Ejecutando scriptlet: kernel-modules-6.12.0-211.66.1.el10_2.x86_64      20/34 
+  Eliminando          : kernel-modules-core-6.12.0-211.66.1.el10_2.x86_   21/34 
+  Ejecutando scriptlet: kernel-core-6.12.0-211.66.1.el10_2.x86_64         22/34 
+  Eliminando          : kernel-core-6.12.0-211.66.1.el10_2.x86_64         22/34 
+  Ejecutando scriptlet: kernel-core-6.12.0-211.66.1.el10_2.x86_64         22/34 
+  Limpieza            : kernel-headers-6.12.0-211.69.1.el10_2.x86_64      23/34 
+  Limpieza            : kernel-modules-extra-matched-6.12.0-211.69.1.el   24/34 
+  Ejecutando scriptlet: newrelic-infra-1.81.0-1.el8.x86_64                25/34 
+Removed '/etc/systemd/system/multi-user.target.wants/newrelic-infra.service'.
+     Active: active (running) since Wed 2026-11-04 19:51:24 -03; 4h 1min ago
+
+  Limpieza            : newrelic-infra-1.81.0-1.el8.x86_64                25/34 
+  Ejecutando scriptlet: util-linux-2.40.2-18.el10.x86_64                  26/34 
+  Limpieza            : util-linux-2.40.2-18.el10.x86_64                  26/34 
+  Ejecutando scriptlet: util-linux-2.40.2-18.el10.x86_64                  26/34 
+  Limpieza            : util-linux-core-2.40.2-18.el10.x86_64             27/34 
+  Limpieza            : libfdisk-2.40.2-18.el10.x86_64                    28/34 
+  Limpieza            : libmount-2.40.2-18.el10.x86_64                    29/34 
+  Limpieza            : kernel-tools-6.12.0-211.69.1.el10_2.x86_64        30/34 
+  Limpieza            : libblkid-2.40.2-18.el10.x86_64                    31/34 
+  Limpieza            : libuuid-2.40.2-18.el10.x86_64                     32/34 
+  Limpieza            : kernel-tools-libs-6.12.0-211.69.1.el10_2.x86_64   33/34 
+  Ejecutando scriptlet: kernel-tools-libs-6.12.0-211.69.1.el10_2.x86_64   33/34 
+  Limpieza            : libsmartcols-2.40.2-18.el10.x86_64                34/34 
+  Ejecutando scriptlet: kernel-modules-core-6.12.0-211.73.1.el10_2.x86_   34/34 
+  Ejecutando scriptlet: kernel-core-6.12.0-211.73.1.el10_2.x86_64         34/34 
+  Ejecutando scriptlet: kernel-modules-6.12.0-211.73.1.el10_2.x86_64      34/34 
+  Ejecutando scriptlet: newrelic-infra-2.0.1-1.el8.x86_64                 34/34 
+Created symlink '/etc/systemd/system/multi-user.target.wants/newrelic-infra.service' → '/etc/systemd/system/newrelic-infra.service'.
+
+  Ejecutando scriptlet: libsmartcols-2.40.2-18.el10.x86_64                34/34 
+
+Actualizado:
+  kernel-headers-6.12.0-211.73.1.el10_2.x86_64                                  
+  kernel-modules-extra-matched-6.12.0-211.73.1.el10_2.x86_64                    
+  kernel-tools-6.12.0-211.73.1.el10_2.x86_64                                    
+  kernel-tools-libs-6.12.0-211.73.1.el10_2.x86_64                               
+  libblkid-2.40.2-18.el10_2.20.x86_64                                           
+  libfdisk-2.40.2-18.el10_2.20.x86_64                                           
+  libmount-2.40.2-18.el10_2.20.x86_64                                           
+  libsmartcols-2.40.2-18.el10_2.20.x86_64                                       
+  libuuid-2.40.2-18.el10_2.20.x86_64                                            
+  newrelic-infra-2.0.1-1.el8.x86_64                                             
+  util-linux-2.40.2-18.el10_2.20.x86_64                                         
+  util-linux-core-2.40.2-18.el10_2.20.x86_64                                    
+Instalado:
+  kernel-6.12.0-211.73.1.el10_2.x86_64                                          
+  kernel-core-6.12.0-211.73.1.el10_2.x86_64                                     
+  kernel-modules-6.12.0-211.73.1.el10_2.x86_64                                  
+  kernel-modules-core-6.12.0-211.73.1.el10_2.x86_64                             
+  kernel-modules-extra-6.12.0-211.73.1.el10_2.x86_64                            
+Omitido:
+  fluent-bit-5.1.5-1.x86_64                                                     
+Eliminado:
+  kernel-6.12.0-211.66.1.el10_2.x86_64                                          
+  kernel-core-6.12.0-211.66.1.el10_2.x86_64                                     
+  kernel-modules-6.12.0-211.66.1.el10_2.x86_64                                  
+  kernel-modules-core-6.12.0-211.66.1.el10_2.x86_64                             
+  kernel-modules-extra-6.12.0-211.66.1.el10_2.x86_64                            
+
+¡Listo!
+Última comprobación de caducidad de metadatos hecha hace 3:35:45, el mié 04 nov 2026 20:18:19.
+Dependencias resueltas.
+================================================================================
+ Paquete                       Arq.    Versión                 Repositorio
+                                                                           Tam.
+================================================================================
+Eliminando:
+ avahi-libs                    x86_64  0.9~rc2-2.el10_0        @anaconda  178 k
+ duktape                       x86_64  2.7.0-10.el10           @anaconda  616 k
+ fonts-filesystem              noarch  1:2.0.5-18.el10         @anaconda    0  
+ glib-networking               x86_64  2.80.0-3.el10           @anaconda  723 k
+ gsettings-desktop-schemas     x86_64  47.1-4.el10             @baseos    5.4 M
+ kernel-modules-extra-matched  x86_64  6.12.0-211.73.1.el10_2  @baseos      0  
+ libproxy                      x86_64  0.5.5-4.el10            @anaconda  115 k
+ libwbclient                   x86_64  4.23.5-111.el10_2       @baseos     73 k
+ redhat-mono-vf-fonts          noarch  4.1.0-1.el10            @anaconda  432 k
+ redhat-text-vf-fonts          noarch  4.1.0-1.el10            @anaconda  454 k
+ samba-client-libs             x86_64  4.23.5-111.el10_2       @baseos     21 M
+ samba-common                  noarch  4.23.5-111.el10_2       @baseos    205 k
+ samba-common-libs             x86_64  4.23.5-111.el10_2       @baseos    298 k
+
+Resumen de la transacción
+================================================================================
+Eliminar  13 Paquetes
+
+Espacio liberado: 29 M
+Ejecutando verificación de operación
+Verificación de operación exitosa.
+Ejecutando prueba de operaciones
+Prueba de operación exitosa.
+Ejecutando operación
+  Preparando          :                                                     1/1 
+  Eliminando          : glib-networking-2.80.0-3.el10.x86_64               1/13 
+  Eliminando          : gsettings-desktop-schemas-47.1-4.el10.x86_64       2/13 
+  Eliminando          : redhat-mono-vf-fonts-4.1.0-1.el10.noarch           3/13 
+  Eliminando          : redhat-text-vf-fonts-4.1.0-1.el10.noarch           4/13 
+  Eliminando          : fonts-filesystem-1:2.0.5-18.el10.noarch            5/13 
+  Eliminando          : kernel-modules-extra-matched-6.12.0-211.73.1.el    6/13 
+  Eliminando          : libproxy-0.5.5-4.el10.x86_64                       7/13 
+  Eliminando          : samba-common-libs-4.23.5-111.el10_2.x86_64         8/13 
+  Eliminando          : libwbclient-4.23.5-111.el10_2.x86_64               9/13 
+  Eliminando          : samba-client-libs-4.23.5-111.el10_2.x86_64        10/13 
+  Eliminando          : samba-common-4.23.5-111.el10_2.noarch             11/13 
+  Eliminando          : avahi-libs-0.9~rc2-2.el10_0.x86_64                12/13 
+  Eliminando          : duktape-2.7.0-10.el10.x86_64                      13/13 
+  Ejecutando scriptlet: duktape-2.7.0-10.el10.x86_64                      13/13 
+
+Eliminado:
+  avahi-libs-0.9~rc2-2.el10_0.x86_64                                            
+  duktape-2.7.0-10.el10.x86_64                                                  
+  fonts-filesystem-1:2.0.5-18.el10.noarch                                       
+  glib-networking-2.80.0-3.el10.x86_64                                          
+  gsettings-desktop-schemas-47.1-4.el10.x86_64                                  
+  kernel-modules-extra-matched-6.12.0-211.73.1.el10_2.x86_64                    
+  libproxy-0.5.5-4.el10.x86_64                                                  
+  libwbclient-4.23.5-111.el10_2.x86_64                                          
+  redhat-mono-vf-fonts-4.1.0-1.el10.noarch                                      
+  redhat-text-vf-fonts-4.1.0-1.el10.noarch                                      
+  samba-client-libs-4.23.5-111.el10_2.x86_64                                    
+  samba-common-4.23.5-111.el10_2.noarch                                         
+  samba-common-libs-4.23.5-111.el10_2.x86_64                                    
+
+¡Listo!
+=== FIN ACTUALIZACIÓN DNF - mié 04 nov 2026 23:54:05 -03 ===
