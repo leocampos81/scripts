@@ -55,7 +55,7 @@ menu() {
         echo "2) Monitoreo Avanzado de Recursos (btop, ps top CPU/RAM)"
         echo "3) Servicios y Contenedores Docker (Avanzado)"
         echo "4) Mantenimiento de Sistema y Sincronización Git"
-        echo "5) Utilidades Varias (Clima wttr.in, etc.)"
+        echo "5) Utilidades Varias y Servicios CLI (Clima, IP, QR mkqr, Credenciales)"
         echo "6) Herramientas de Automatización (Ansible, Terraform)"
         echo "7) Diagnóstico y Pruebas de Red Avanzadas"
         echo "8) Auditoría de Red y Seguridad (Nmap)"
@@ -86,9 +86,9 @@ menu() {
                     echo "8) Recursos locales y procesos en vivo (top, ps CPU/RAM, free)"
                     echo "9) Almacenamiento y particiones (df -h)"
                     echo "10) Red básica e interfaces (ip a, ip route, ss ports, ping)"
-                    echo "11) Volver al menú principal"
+                    echo "q) Volver al menú principal"
                     echo "=========================================================="
-                    prompt_input "Elige una opción [1-11]: " nat_opt
+                    prompt_input "Elige una opción [1-10 o q]: " nat_opt
 
                     case $nat_opt in
                         1)
@@ -277,7 +277,7 @@ menu() {
                             esac
                             pause_screen
                             ;;
-                        11) break ;;
+                        q|[qQ]) break ;;
                     esac
                 done
                 ;;
@@ -289,13 +289,13 @@ menu() {
                     echo "=========================================="
                     echo "1) btop (Monitor moderno)"
                     echo "2) htop (Monitor por procesos)"
-                    echo "3) Volver al menú principal"
+                    echo "q) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-3]: " sub_opt
+                    prompt_input "Elige una opción [1-2 o q]: " sub_opt
                     case $sub_opt in
                         1) command -v btop &> /dev/null && btop || echo "[!] btop no instalado." ;;
                         2) command -v htop &> /dev/null && htop || echo "[!] htop no instalado." ;;
-                        3) break ;;
+                        q|[qQ]) break ;;
                     esac
                 done
                 ;;
@@ -316,9 +316,9 @@ menu() {
                     echo "3) Inspeccionar logs de un contenedor"
                     echo "4) Reiniciar / Detener / Iniciar contenedor"
                     echo "5) Limpieza general (docker system prune)"
-                    echo "6) Volver al menú principal"
+                    echo "q) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-6]: " d_opt
+                    prompt_input "Elige una opción [1-5 o q]: " d_opt
 
                     case $d_opt in
                         1)
@@ -351,7 +351,7 @@ menu() {
                             sudo docker system prune -f
                             pause_screen
                             ;;
-                        6) break ;;
+                        q|[qQ]) break ;;
                     esac
                 done
                 ;;
@@ -363,9 +363,9 @@ menu() {
                     echo "=========================================="
                     echo "1) Actualizar paquetes de sistema (apt/dnf)"
                     echo "2) Sincronizar repositorio de scripts (Git Pull/Push)"
-                    echo "3) Volver al menú principal"
+                    echo "q) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-3]: " sub_opt
+                    prompt_input "Elige una opción [1-2 o q]: " sub_opt
                     case $sub_opt in
                         1)
                             if command -v apt &> /dev/null; then
@@ -391,22 +391,133 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        3) break ;;
+                        q|[qQ]) break ;;
                     esac
                 done
                 ;;
             5)
-                curl -s "wttr.in?lang=es"
-                pause_screen
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "       UTILIDADES VARIAS Y SERVICIOS CLI"
+                    echo "=========================================="
+                    echo "1) Clima actual completo (wttr.in)"
+                    echo "2) Clima compacto de una línea (wttr.in/?format=3)"
+                    echo "3) Fase lunar actual (wttr.in/moon)"
+                    echo "4) IP pública directa (ifconfig.me / ipinfo.io)"
+                    echo "5) Generar Contraseña segura local (openssl)"
+                    echo "6) Generar UUID v4 único"
+                    echo "7) Generar código QR en terminal (mkqr / qrencode)"
+                    echo "8) Diccionario / Definición de palabras (dict.org)"
+                    echo "9) Hojas de ayuda rápida de comandos (cht.sh)"
+                    echo "q) Volver al menú principal"
+                    echo "=========================================="
+                    prompt_input "Elige una opción [1-9 o q]: " util_opt
+                    case $util_opt in
+                        1)
+                            echo ""
+                            echo "[-] Consultando wttr.in..."
+                            curl -s "wttr.in?lang=es"
+                            log_action "Utilidades: Clima completo wttr.in"
+                            pause_screen
+                            ;;
+                        2)
+                            echo ""
+                            echo "[-] Consultando clima compacto..."
+                            curl -s "wttr.in/?format=3"
+                            log_action "Utilidades: Clima compacto"
+                            pause_screen
+                            ;;
+                        3)
+                            echo ""
+                            echo "[-] Consultando fase lunar..."
+                            curl -s "wttr.in/moon"
+                            log_action "Utilidades: Fase lunar"
+                            pause_screen
+                            ;;
+                        4)
+                            echo ""
+                            echo "[-] IP Pública (ifconfig.me):"
+                            curl -s ifconfig.me
+                            echo ""
+                            echo ""
+                            echo "--- Detalles geográficos (ipinfo.io) ---"
+                            curl -s ipinfo.io
+                            log_action "Utilidades: IP pública ifconfig.me"
+                            pause_screen
+                            ;;
+                        5)
+                            echo ""
+                            echo "[-] Generando contraseña aleatoria segura (16 chars):"
+                            openssl rand -base64 12
+                            log_action "Utilidades: Contraseña local generada"
+                            pause_screen
+                            ;;
+                        6)
+                            echo ""
+                            echo "[-] UUID generado:"
+                            curl -s "https://www.uuidgenerator.net/api/version4"
+                            echo ""
+                            log_action "Utilidades: UUID generado"
+                            pause_screen
+                            ;;
+                        7)
+                            echo ""
+                            prompt_input "Ingresa el texto o URL para generar el QR: " qr_text
+                            if [[ -n "$qr_text" ]]; then
+                                echo "[-] Generando código QR con mkqr..."
+                                if command -v mkqr &> /dev/null; then
+                                    mkqr "$qr_text"
+                                elif command -v qrencode &> /dev/null; then
+                                    qrencode -t ansiutf8 "$qr_text"
+                                else
+                                    curl -s "qrenco.de/$qr_text"
+                                fi
+                                log_action "Utilidades: Código QR generado para $qr_text"
+                            fi
+                            pause_screen
+                            ;;
+                        8)
+                            echo ""
+                            prompt_input "Ingresa la palabra a consultar (en inglés/término tech): " dict_word
+                            if [[ -n "$dict_word" ]]; then
+                                echo "[-] Buscando definición para '$dict_word'..."
+                                curl -s "dict.org/d:$dict_word" | head -n 35
+                                log_action "Utilidades: Diccionario para $dict_word"
+                            fi
+                            pause_screen
+                            ;;
+                        9)
+                            echo ""
+                            prompt_input "Ingresa el comando a consultar (ej: rsync, tar, git): " c_cmd
+                            if [[ -n "$c_cmd" ]]; then
+                                echo "[-] Consultando cheat.sh para '$c_cmd'..."
+                                curl -s "cht.sh/$c_cmd"
+                                log_action "Utilidades: Cheat sheet de $c_cmd"
+                            fi
+                            pause_screen
+                            ;;
+                        q|[qQ]) break ;;
+                    esac
+                done
                 ;;
             6)
-                echo "1) Ansible Status | 2) Terraform Status"
-                prompt_input "Elige [1-2]: " aut_opt
-                case $aut_opt in
-                    1) command -v ansible &> /dev/null && ansible --version || echo "Ansible no instalado" ;;
-                    2) command -v terraform &> /dev/null && terraform version || echo "Terraform no instalado" ;;
-                esac
-                pause_screen
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "      HERRAMIENTAS DE AUTOMATIZACIÓN"
+                    echo "=========================================="
+                    echo "1) Ansible Status"
+                    echo "2) Terraform Status"
+                    echo "q) Volver al menú principal"
+                    echo "=========================================="
+                    prompt_input "Elige una opción [1-2 o q]: " aut_opt
+                    case $aut_opt in
+                        1) command -v ansible &> /dev/null && ansible --version || echo "Ansible no instalado" ; pause_screen ;;
+                        2) command -v terraform &> /dev/null && terraform version || echo "Terraform no instalado" ; pause_screen ;;
+                        q|[qQ]) break ;;
+                    esac
+                done
                 ;;
             7)
                 while true; do
@@ -419,9 +530,9 @@ menu() {
                     echo "3) Verificación de puerto remoto abierto (nc / /dev/tcp)"
                     echo "4) Trazado de ruta (traceroute / tracepath)"
                     echo "5) Resolución y consulta DNS (dig / nslookup)"
-                    echo "6) Volver al menú principal"
+                    echo "q) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-6]: " net_adv_opt
+                    prompt_input "Elige una opción [1-5 o q]: " net_adv_opt
 
                     case $net_adv_opt in
                         1)
@@ -498,7 +609,7 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        6) break ;;
+                        q|[qQ]) break ;;
                     esac
                 done
                 ;;
@@ -537,9 +648,9 @@ menu() {
                     echo "2) Escaneo completo con detección de versiones (-sV)"
                     echo "3) Escaneo agresivo (SO, versiones y scripts -A)"
                     echo "4) Escaneo de red local (descubrimiento de hosts activos)"
-                    echo "5) Volver al menú principal"
+                    echo "q) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-5]: " nmap_opt
+                    prompt_input "Elige una opción [1-4 o q]: " nmap_opt
 
                     case $nmap_opt in
                         1)
@@ -582,7 +693,7 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        5) break ;;
+                        q|[qQ]) break ;;
                     esac
                 done
                 ;;

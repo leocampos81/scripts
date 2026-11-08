@@ -92,3 +92,38 @@
 [2026-11-08 00:05:12] Red Avanzada: Traceroute a sonarfm.cl
 [2026-11-08 00:13:44] Red Avanzada: Ping a 192.168.1.108 (10 paquetes)
 [2026-11-08 00:13:52] Red Avanzada: Curl detallado a sonarfm.cl
+[2026-11-08 00:53:22] Journalctl: Consulta de logs en rsyslog.service
+[2026-11-08 00:53:34] Journalctl: Consulta de logs en newrelic-infra.service
+[2026-11-08 00:59:15] Utilidades: Clima completo wttr.in
+[2026-11-08 00:59:18] Utilidades: Clima compacto
+[2026-11-08 00:59:24] Utilidades: Fase lunar
+[2026-11-08 00:59:27] Utilidades: IP y Geolocalización
+[2026-11-08 00:59:37] Utilidades: Código QR generado
+[2026-11-08 00:59:48] Utilidades: Cheat sheet de rsync
+[2026-11-08 01:00:00] Utilidades: Cotización rate.sx de btc
+[2026-11-08 01:06:54] Utilidades: Código QR generado
+[2026-11-08 01:07:24] Utilidades: Código QR generado
+[2026-11-08 01:33:26] Utilidades: IP e ISP ip.guide
+[2026-11-08 01:33:53] Utilidades: Generador ejecutado (1)
+[2026-11-08 01:34:04] Utilidades: Generador ejecutado (2)
+[2026-11-08 01:34:31] Utilidades: Clima completo wttr.in
+[2026-11-08 01:34:33] Utilidades: Clima compacto
+[2026-11-08 01:34:44] Utilidades: Fase lunar
+[2026-11-08 01:34:51] Utilidades: IP e ISP ip.guide
+[2026-11-08 01:34:56] Utilidades: Generador ejecutado (1)
+[2026-11-08 01:35:02] Utilidades: IP e ISP ip.guide
+[2026-11-08 01:35:13] Utilidades: Generador ejecutado (2)
+[2026-11-08 01:35:30] Utilidades: Diccionario para mouse
+[2026-11-08 01:35:50] Utilidades: Diccionario para ssd
+[2026-11-08 01:36:18] Utilidades: Código QR generado
+[2026-11-08 01:36:35] Utilidades: Cheat sheet de tar
+[2026-11-08 01:36:47] Utilidades: Cotización rate.sx de eth
+[2026-11-08 01:37:26] Utilidades: IP e ISP ip.guide
+[2026-11-08 02:05:21] Utilidades: Contraseña local generada
+[2026-11-08 02:05:27] Utilidades: Contraseña local generada
+[2026-11-08 02:05:33] Utilidades: UUID generado
+[2026-11-08 02:21:11] Utilidades: IP pública wiredalter
+[2026-11-08 02:21:26] Utilidades: Código QR generado para sonarfm.cl
+[2026-11-08 02:21:34] Utilidades: IP pública wiredalter
+[2026-11-08 02:22:22] Utilidades: Código QR generado para peoloco
+[2026-11-08 02:33:56] Utilidades: IP pública ifconfig.me
