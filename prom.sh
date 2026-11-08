@@ -43,7 +43,7 @@ menu() {
         clear
         echo "╔══════════════════════════════════════════════════════════════════╗"
         echo "║                                                                  ║"
-        echo "║                  P R O M E T H E R I O N  2 1 1 2                ║"
+        echo "║                  P R O M E T H E R I O N  2 1 1 2                  ║"
         echo "║                 S Y S A D M I N   D A S H B O A R D              ║"
         echo "║                                                                  ║"
         echo "╚══════════════════════════════════════════════════════════════════╝"
@@ -51,13 +51,13 @@ menu() {
         echo "[*] Usuario Activo : $USER@$(hostname)"
         echo "[*] Servidor actual: $sistema_actual"
         echo "=========================================================="
-        echo "1) Herramientas de sistema nativas (grep, rsync, diff, journalctl)"
-        echo "2) Monitoreo de recursos locales y disco (btop, ps top CPU/RAM)"
+        echo "1) Herramientas Nativas del Sistema (Archivos, Servicios, Red, Monitoreo)"
+        echo "2) Monitoreo Avanzado de Recursos (btop, ps top CPU/RAM)"
         echo "3) Servicios y Contenedores Docker (Avanzado)"
         echo "4) Mantenimiento de Sistema y Sincronización Git"
         echo "5) Utilidades Varias (Clima wttr.in, etc.)"
         echo "6) Herramientas de Automatización (Ansible, Terraform)"
-        echo "7) Diagnóstico y Pruebas de Red (IP, Ping, DNS, Curl, SS)"
+        echo "7) Diagnóstico y Pruebas de Red Avanzadas"
         echo "8) Auditoría de Red y Seguridad (Nmap)"
         echo "9) Salir (o presiona 'q')"
         echo "=========================================================="
@@ -68,21 +68,52 @@ menu() {
             1)
                 while true; do
                     clear
-                    echo "=========================================="
-                    echo "     HERRAMIENTAS DE SISTEMA NATIVAS"
-                    echo "=========================================="
-                    echo "1) Análisis de logs y búsqueda (grep / egrep)"
-                    echo "2) Inspección de servicios y logs del sistema (journalctl)"
-                    echo "3) Conteo de líneas, palabras y bytes (wc)"
-                    echo "4) Comparación de archivos y diferencias (diff)"
-                    echo "5) Sincronización y respaldo rápido (rsync)"
-                    echo "6) Resumen de espacio en disco (df -h)"
-                    echo "7) Volver al menú principal"
-                    echo "=========================================="
-                    prompt_input "Elige una opción [1-7]: " nat_opt
+                    echo "=========================================================="
+                    echo "          HERRAMIENTAS NATIVAS Y DIAGNÓSTICO LINUX"
+                    echo "=========================================================="
+                    echo "--- TRABAJAR CON ARCHIVOS ---"
+                    echo "1) Editar archivos (nvim / nano / vi)"
+                    echo "2) Búsqueda y filtrado de texto (grep / egrep)"
+                    echo "3) Información y metadatos de archivo (stat, file, wc)"
+                    echo "4) Comparación de archivos (diff)"
+                    echo "5) Resguardo rápido (rsync)"
+                    echo ""
+                    echo "--- SERVICIOS Y LOGS (SYSTEMCTL / JOURNALCTL) ---"
+                    echo "6) Gestión de servicios systemctl (con autolistado de activos)"
+                    echo "7) Inspección de logs journalctl (con autolistado de servicios)"
+                    echo ""
+                    echo "--- RECURSOS, DISCOS Y RED NATIVA ---"
+                    echo "8) Recursos locales y procesos en vivo (top, ps CPU/RAM, free)"
+                    echo "9) Almacenamiento y particiones (df -h)"
+                    echo "10) Red básica e interfaces (ip a, ip route, ss ports, ping)"
+                    echo "11) Volver al menú principal"
+                    echo "=========================================================="
+                    prompt_input "Elige una opción [1-11]: " nat_opt
 
                     case $nat_opt in
                         1)
+                            echo ""
+                            echo "=========================================="
+                            echo "        EDITOR DE ARCHIVOS LOCALES"
+                            echo "=========================================="
+                            echo "1) nvim"
+                            echo "2) nano"
+                            echo "3) vi"
+                            prompt_input "Selecciona el editor [1-3]: " ed_opt
+                            prompt_input "Ruta del archivo a editar: " target_file
+                            
+                            if [[ -n "$target_file" ]]; then
+                                case $ed_opt in
+                                    1) nvim "$target_file" ;;
+                                    2) nano "$target_file" ;;
+                                    3) vi "$target_file" ;;
+                                    *) nano "$target_file" ;;
+                                esac
+                                log_action "Editor: Abierto archivo $target_file"
+                            fi
+                            pause_screen
+                            ;;
+                        2)
                             echo ""
                             echo "=========================================="
                             echo "    BÚSQUEDA Y FILTRADO EN TEXTO / LOGS"
@@ -100,25 +131,23 @@ menu() {
                             fi
                             pause_screen
                             ;;
-                        2)
-                            echo ""
-                            echo "=========================================="
-                            echo "       INSPECCIÓN CON JOURNALCTL"
-                            echo "=========================================="
-                            prompt_input "Nombre del servicio a consultar (ej: sshd, nginx, docker): " svc_name
-                            if [[ -n "$svc_name" ]]; then
-                                echo "[-] Mostrando últimas 30 líneas de registro para '$svc_name':"
-                                journalctl -u "$svc_name" -n 30 --no-pager
-                                log_action "Journalctl: Consulta de servicio $svc_name"
-                            fi
-                            pause_screen
-                            ;;
                         3)
                             echo ""
-                            prompt_input "Ruta del archivo a contar (wc): " wc_file
-                            if [[ -f "$wc_file" ]]; then
-                                echo "[-] Métricas del archivo (Líneas / Palabras / Bytes):"
-                                wc "$wc_file"
+                            echo "=========================================="
+                            echo "      INFORMACIÓN DETALLADA DE ARCHIVO"
+                            echo "=========================================="
+                            prompt_input "Ruta del archivo a analizar: " info_file
+                            if [[ -f "$info_file" ]]; then
+                                echo ""
+                                echo "--- TIPO Y CODIFICACIÓN (file) ---"
+                                file "$info_file"
+                                echo ""
+                                echo "--- METADATOS Y ESTADO (stat) ---"
+                                stat "$info_file"
+                                echo ""
+                                echo "--- MÉTRICAS (Líneas / Palabras / Bytes - wc) ---"
+                                wc "$info_file"
+                                log_action "Info: Análisis detallado de $info_file"
                             else
                                 echo "[ERROR] El archivo no existe."
                             fi
@@ -131,6 +160,7 @@ menu() {
                             if [[ -f "$f1" && -f "$f2" ]]; then
                                 echo "[-] Diferencias encontradas (diff -u):"
                                 diff -u "$f1" "$f2" || true
+                                log_action "Diff: Comparación entre $f1 y $f2"
                             else
                                 echo "[ERROR] Uno o ambos archivos no existen."
                             fi
@@ -152,11 +182,102 @@ menu() {
                             ;;
                         6)
                             echo ""
-                            echo "[-] Resumen de discos (df -h):"
+                            echo "=========================================="
+                            echo "      GESTIÓN DE SERVICIOS (SYSTEMCTL)"
+                            echo "=========================================="
+                            echo "[-] Listando servicios activos en el servidor:"
+                            echo "------------------------------------------"
+                            systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print "  > " $1, " (" $4 ")"}'
+                            echo "------------------------------------------"
+                            
+                            prompt_input "Indica el servicio a gestionar (ej: ssh.service o apache2): " svc_target
+                            
+                            if [[ -n "$svc_target" ]]; then
+                                [[ "$svc_target" != *.service ]] && svc_target="${svc_target}.service"
+                                
+                                echo ""
+                                echo "Servicio seleccionado: $svc_target"
+                                echo "1) Consultar estado (status)"
+                                echo "2) Iniciar servicio (start)"
+                                echo "3) Reiniciar servicio (restart)"
+                                echo "4) Detener servicio (stop)"
+                                prompt_input "Elige la acción [1-4]: " act_svc
+                                
+                                case $act_svc in
+                                    1) sudo systemctl status "$svc_target" --no-pager ;;
+                                    2) sudo systemctl start "$svc_target" && echo "[OK] Servicio iniciado." ; log_action "Systemctl: Start $svc_target" ;;
+                                    3) sudo systemctl restart "$svc_target" && echo "[OK] Servicio reiniciado." ; log_action "Systemctl: Restart $svc_target" ;;
+                                    4) sudo systemctl stop "$svc_target" && echo "[OK] Servicio detenido." ; log_action "Systemctl: Stop $svc_target" ;;
+                                esac
+                            fi
+                            pause_screen
+                            ;;
+                        7)
+                            echo ""
+                            echo "=========================================="
+                            echo "       INSPECCIÓN DE LOGS (JOURNALCTL)"
+                            echo "=========================================="
+                            echo "[-] Listando servicios activos disponibles para consulta:"
+                            echo "------------------------------------------"
+                            systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print "  > " $1}'
+                            echo "------------------------------------------"
+                            
+                            prompt_input "Nombre del servicio a consultar (ej: ssh, apache2, docker): " svc_name
+                            if [[ -n "$svc_name" ]]; then
+                                [[ "$svc_name" != *.service ]] && svc_name="${svc_name}.service"
+                                echo "[-] Mostrando últimas 40 líneas de registro para '$svc_name':"
+                                journalctl -u "$svc_name" -n 40 --no-pager
+                                log_action "Journalctl: Consulta de logs en $svc_name"
+                            fi
+                            pause_screen
+                            ;;
+                        8)
+                            echo ""
+                            echo "=========================================="
+                            echo "       RECURSOS Y PROCESOS LOCALES"
+                            echo "=========================================="
+                            echo "1) Top 10 procesos por CPU"
+                            echo "2) Top 10 procesos por Memoria"
+                            echo "3) Memoria RAM y Swap en uso (free -h)"
+                            echo "4) Monitor interactivo básico (top)"
+                            prompt_input "Selecciona opción [1-4]: " res_opt
+                            case $res_opt in
+                                1) ps aux --sort=-%cpu | head -n 11 ;;
+                                2) ps aux --sort=-%mem | head -n 11 ;;
+                                3) free -h ;;
+                                4) top ;;
+                            esac
+                            log_action "Nativo: Monitoreo de recursos ejecutado."
+                            pause_screen
+                            ;;
+                        9)
+                            echo ""
+                            echo "[-] Almacenamiento en disco (df -h):"
                             df -h -x tmpfs -x devtmpfs
                             pause_screen
                             ;;
-                        7) break ;;
+                        10)
+                            echo ""
+                            echo "=========================================="
+                            echo "           RED Y CONECTIVIDAD BÁSICA"
+                            echo "=========================================="
+                            echo "1) Direcciones IP e interfaces (ip a)"
+                            echo "2) Tabla de ruteo (ip route)"
+                            echo "3) Puertos locales en escucha (ss -tulpn)"
+                            echo "4) Prueba rápida de conectividad (ping)"
+                            prompt_input "Selecciona opción [1-4]: " net_choice
+                            case $net_choice in
+                                1) ip -brief address ;;
+                                2) ip route ;;
+                                3) sudo ss -tulpn | grep LISTEN ;;
+                                4) 
+                                    prompt_input "Ingresa IP o host de prueba: " p_target
+                                    [[ -n "$p_target" ]] && ping -c 4 "$p_target"
+                                    ;;
+                            esac
+                            pause_screen
+                            ;;
+                        11) break ;;
                     esac
                 done
                 ;;
@@ -164,78 +285,17 @@ menu() {
                 while true; do
                     clear
                     echo "=========================================="
-                    echo "   MONITOREO DE RECURSOS LOCALES Y DISCO"
+                    echo "   MONITOREO AVANZADO DE RECURSOS"
                     echo "=========================================="
-                    echo "1) Monitores interactivos de procesos (btop / htop / top)"
-                    echo "2) Top procesos con mayor consumo de CPU (ps)"
-                    echo "3) Top procesos con mayor consumo de Memoria (ps)"
-                    echo "4) Diagnóstico tradicional de disco (df -h)"
-                    echo "5) Visualizador visual de almacenamiento (duf)"
-                    echo "6) Explorador interactivo de carpetas pesadas (ncdu)"
-                    echo "7) Volver al menú principal"
+                    echo "1) btop (Monitor moderno)"
+                    echo "2) htop (Monitor por procesos)"
+                    echo "3) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-7]: " sub_opt
+                    prompt_input "Elige una opción [1-3]: " sub_opt
                     case $sub_opt in
-                        1)
-                            echo ""
-                            echo "1) btop (Monitor moderno)"
-                            echo "2) htop (Monitor por procesos)"
-                            echo "3) top (Monitor básico nativo)"
-                            prompt_input "Selecciona monitor [1-3]: " m_opt
-                            case $m_opt in
-                                1) command -v btop &> /dev/null && btop || echo "[!] btop no instalado." ;;
-                                2) command -v htop &> /dev/null && htop || echo "[!] htop no instalado." ;;
-                                3) top ;;
-                            esac
-                            pause_screen
-                            ;;
-                        2)
-                            echo ""
-                            echo "[-] Top 10 procesos consumiendo más CPU:"
-                            ps aux --sort=-%cpu | head -n 11
-                            log_action "Monitoreo: Top procesos por CPU ejecutado."
-                            pause_screen
-                            ;;
-                        3)
-                            echo ""
-                            echo "[-] Top 10 procesos consumiendo más Memoria:"
-                            ps aux --sort=-%mem | head -n 11
-                            log_action "Monitoreo: Top procesos por Memoria ejecutado."
-                            pause_screen
-                            ;;
-                        4)
-                            echo ""
-                            echo "[-] Resumen de almacenamiento local (df):"
-                            df -h -x tmpfs -x devtmpfs
-                            pause_screen
-                            ;;
-                        5)
-                            echo ""
-                            if command -v duf &> /dev/null; then
-                                duf
-                            else
-                                echo "[!] duf no está instalado."
-                                prompt_input "¿Deseas instalar duf ahora? (s/n): " inst_duf
-                                if [[ "$inst_duf" == "s" || "$inst_duf" == "S" ]]; then
-                                    if command -v apt &> /dev/null; then
-                                        sudo apt update && sudo apt install -y duf
-                                    elif command -v dnf &> /dev/null; then
-                                        sudo dnf install -y duf
-                                    fi
-                                    log_action "Instalación completada: duf."
-                                fi
-                            fi
-                            pause_screen
-                            ;;
-                        6)
-                            if command -v ncdu &> /dev/null; then
-                                ncdu /
-                            else
-                                echo "[!] ncdu no está instalado."
-                            fi
-                            pause_screen
-                            ;;
-                        7) break ;;
+                        1) command -v btop &> /dev/null && btop || echo "[!] btop no instalado." ;;
+                        2) command -v htop &> /dev/null && htop || echo "[!] htop no instalado." ;;
+                        3) break ;;
                     esac
                 done
                 ;;
@@ -251,123 +311,47 @@ menu() {
                         break
                     fi
 
-                    if ! systemctl is-active --quiet docker 2>/dev/null; then
-                        echo "[!] El servicio Docker no está activo en systemd."
-                        pause_screen
-                        break
-                    fi
-
                     echo "1) Ver contenedores activos (docker ps)"
-                    echo "2) Ver TODOS los contenedores (activos e inactivos)"
-                    echo "3) Monitoreo de CPU/RAM en tiempo real (docker stats)"
-                    echo "4) Inspeccionar logs de un contenedor (con fzf)"
-                    echo "5) Iniciar / Detener / Reiniciar contenedor (con fzf)"
-                    echo "6) Ver IP/Redes de un contenedor (docker inspect)"
-                    echo "7) Ver uso de disco e imágenes guardadas"
-                    echo "8) Mantenimiento / Limpieza (prune de contenedores e imágenes huérfanas)"
-                    echo "9) Volver al menú principal"
+                    echo "2) Monitoreo de CPU/RAM en tiempo real (docker stats)"
+                    echo "3) Inspeccionar logs de un contenedor"
+                    echo "4) Reiniciar / Detener / Iniciar contenedor"
+                    echo "5) Limpieza general (docker system prune)"
+                    echo "6) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-9]: " d_opt
+                    prompt_input "Elige una opción [1-6]: " d_opt
 
                     case $d_opt in
                         1)
-                            echo ""
-                            echo "[-] Contenedores en ejecución:"
                             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                             pause_screen
                             ;;
                         2)
-                            echo ""
-                            echo "[-] Listado completo de contenedores:"
-                            docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+                            docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
                             pause_screen
                             ;;
                         3)
-                            echo ""
-                            echo "[-] Monitoreo en vivo de consumo de CPU/RAM/RED (Ctrl+C para salir):"
-                            sleep 1
-                            docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
+                            prompt_input "Nombre del contenedor: " cnt_name
+                            [[ -n "$cnt_name" ]] && docker logs -f --tail 50 "$cnt_name"
                             pause_screen
                             ;;
                         4)
-                            echo ""
-                            local target_cnt=""
-                            if command -v fzf &> /dev/null; then
-                                target_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor para ver logs > ")
-                            else
-                                prompt_input "Nombre del contenedor: " target_cnt
-                            fi
-
-                            if [[ -n "$target_cnt" ]]; then
-                                echo ""
-                                echo "[-] Mostrando últimas 50 líneas de log para '$target_cnt' (Ctrl+C para salir):"
-                                sleep 1
-                                docker logs -f --tail 50 "$target_cnt"
-                                log_action "Docker: Consulta de logs en $target_cnt."
-                            fi
-                            pause_screen
-                            ;;
-                        5)
-                            echo ""
-                            local action_cnt=""
-                            if command -v fzf &> /dev/null; then
-                                action_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor a gestionar > ")
-                            else
-                                prompt_input "Nombre del contenedor: " action_cnt
-                            fi
-
-                            if [[ -n "$action_cnt" ]]; then
-                                echo ""
-                                echo "Gestión para '$action_cnt':"
-                                echo "1) Reiniciar (restart)"
-                                echo "2) Detener (stop)"
-                                echo "3) Iniciar (start)"
-                                prompt_input "Selecciona acción [1-3]: " act_choice
-                                case $act_choice in
-                                    1) sudo docker restart "$action_cnt" && log_action "Docker: Restart $action_cnt" ;;
-                                    2) sudo docker stop "$action_cnt" && log_action "Docker: Stop $action_cnt" ;;
-                                    3) sudo docker start "$action_cnt" && log_action "Docker: Start $action_cnt" ;;
+                            prompt_input "Nombre del contenedor: " cnt_name
+                            if [[ -n "$cnt_name" ]]; then
+                                echo "1) Restart | 2) Stop | 3) Start"
+                                prompt_input "Acción [1-3]: " act_c
+                                case $act_c in
+                                    1) sudo docker restart "$cnt_name" ;;
+                                    2) sudo docker stop "$cnt_name" ;;
+                                    3) sudo docker start "$cnt_name" ;;
                                 esac
                             fi
                             pause_screen
                             ;;
-                        6)
-                            echo ""
-                            local inspect_cnt=""
-                            if command -v fzf &> /dev/null; then
-                                inspect_cnt=$(docker ps -a --format "{{.Names}}" | fzf --prompt="Selecciona contenedor a inspeccionar > ")
-                            else
-                                prompt_input "Nombre del contenedor: " inspect_cnt
-                            fi
-
-                            if [[ -n "$inspect_cnt" ]]; then
-                                echo ""
-                                echo "[-] IP y Redes asignadas a '$inspect_cnt':"
-                                docker inspect --format '{{range .NetworkSettings.Networks}}IP: {{.IPAddress}} | Gateway: {{.Gateway}} {{end}}' "$inspect_cnt"
-                            fi
+                        5)
+                            sudo docker system prune -f
                             pause_screen
                             ;;
-                        7)
-                            echo ""
-                            echo "[-] Imágenes locales:"
-                            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
-                            echo ""
-                            echo "[-] Uso global de recursos de Docker:"
-                            docker system df
-                            log_action "Docker: Consulta de espacio e imágenes."
-                            pause_screen
-                            ;;
-                        8)
-                            echo ""
-                            echo "[!] Limpieza de elementos en desuso en Docker..."
-                            prompt_input "¿Deseas ejecutar 'docker system prune -f'? (s/n): " confirm_prune
-                            if [[ "$confirm_prune" == "s" || "$confirm_prune" == "S" ]]; then
-                                sudo docker system prune -f
-                                log_action "Docker: Executed docker system prune."
-                            fi
-                            pause_screen
-                            ;;
-                        9) break ;;
+                        6) break ;;
                     esac
                 done
                 ;;
@@ -384,72 +368,27 @@ menu() {
                     prompt_input "Elige una opción [1-3]: " sub_opt
                     case $sub_opt in
                         1)
-                            local update_date=$(date +'%Y%m%d_%H%M%S')
-                            local log_dir="$HOME/.local/bin/scripts/logs"
-                            mkdir -p "$log_dir"
-                            local update_log="$log_dir/update_$update_date.log"
-                            
                             if command -v apt &> /dev/null; then
-                                echo "[-] Actualizando con apt (Detalle en $update_log)..."
-                                { sudo apt update && sudo apt dist-upgrade -y && sudo apt autoremove -y; } > "$update_log" 2>&1
+                                sudo apt update && sudo apt dist-upgrade -y
                             elif command -v dnf &> /dev/null; then
-                                echo "[-] Actualizando con dnf omitiendo conflictos (Detalle en $update_log)..."
-                                { sudo dnf upgrade -y --skip-broken --nobest && sudo dnf autoremove -y; } > "$update_log" 2>&1
+                                sudo dnf upgrade -y --skip-broken
                             fi
-                            echo "[OK] Proceso finalizado."
                             pause_screen
                             ;;
                         2)
-                            echo ""
-                            echo "=========================================="
-                            echo "      SINCRONIZACIÓN GIT INTERACTIVA"
-                            echo "=========================================="
-                            echo "Directorio actual: $HOME/.local/bin/scripts"
                             cd ~/.local/bin/scripts || exit 1
-                            
-                            echo ""
-                            echo "Estado actual del repositorio:"
                             git status -s
                             echo ""
-                            echo "1) git pull (Descargar y fusionar cambios remotos)"
-                            echo "2) git push (Subir cambios locales al repositorio)"
-                            echo "3) Cancelar y volver"
-                            prompt_input "Elige la acción Git [1-3]: " git_action
-
-                            case $git_action in
-                                1)
-                                    echo ""
-                                    echo "[-] Iniciando 'git pull origin main'..."
-                                    if git pull origin main; then
-                                        echo "[OK] Repositorio actualizado exitosamente."
-                                        log_action "Git: Pull ejecutado con éxito."
-                                    else
-                                        echo "[!] Ocurrió un conflicto o error al realizar el pull."
-                                    fi
-                                    ;;
-                                2)
-                                    echo ""
-                                    echo "[-] Preparando subida al repositorio remoto..."
-                                    local default_msg="Actualiza prom.sh"
-                                    prompt_input "Ingresa el mensaje para el commit [Por defecto: '$default_msg']: " git_msg
-                                    git_msg="${git_msg:-$default_msg}"
-
-                                    echo "[-] Agregando archivos modificados (git add .)..."
-                                    git add .
-                                    echo "[-] Generando commit..."
-                                    git commit -m "$git_msg"
-                                    echo "[-] Ejecutando 'git push origin main'..."
-                                    if git push origin main; then
-                                        echo "[OK] Cambios subidos y sincronizados correctamente."
-                                        log_action "Git: Push ejecutado con mensaje: '$git_msg'"
-                                    else
-                                        echo "[!] Error al subir los cambios al repositorio remoto."
-                                    fi
-                                    ;;
-                                3)
-                                    echo "[i] Operación Git cancelada."
-                                    ;;
-                            esac
+                            echo "1) git pull | 2) git push"
+                            prompt_input "Acción [1-2]: " g_act
+                            if [[ "$g_act" == "1" ]]; then
+                                git pull origin main
+                            elif [[ "$g_act" == "2" ]]; then
+                                local default_msg="Actualiza prom.sh"
+                                prompt_input "Mensaje para commit [Default: '$default_msg']: " git_msg
+                                git_msg="${git_msg:-$default_msg}"
+                                git add . && git commit -m "$git_msg" && git push origin main
+                            fi
                             pause_screen
                             ;;
                         3) break ;;
@@ -457,203 +396,109 @@ menu() {
                 done
                 ;;
             5)
-                while true; do
-                    clear
-                    echo "=========================================="
-                    echo "            UTILIDADES VARIAS"
-                    echo "=========================================="
-                    echo "1) Clima actual (wttr.in)"
-                    echo "2) Volver al menú principal"
-                    echo "=========================================="
-                    prompt_input "Elige una opción [1-2]: " sub_opt
-                    case $sub_opt in
-                        1)
-                            echo ""
-                            echo "[-] Consultando wttr.in..."
-                            curl -s "wttr.in?lang=es"
-                            pause_screen
-                            ;;
-                        2) break ;;
-                    esac
-                done
+                curl -s "wttr.in?lang=es"
+                pause_screen
                 ;;
             6)
-                while true; do
-                    clear
-                    echo "=========================================="
-                    echo "     AUTOMATIZACIÓN E INFRAESTRUCTURA"
-                    echo "=========================================="
-                    echo "1) Diagnóstico / Instalación de Ansible"
-                    echo "2) Diagnóstico / Instalación de Terraform"
-                    echo "3) Volver al menú principal"
-                    echo "=========================================="
-                    prompt_input "Elige una opción [1-3]: " auto_opt
-
-                    case $auto_opt in
-                        1)
-                            echo ""
-                            echo "=========================================="
-                            echo "           DIAGNÓSTICO DE ANSIBLE"
-                            echo "=========================================="
-                            if command -v ansible &> /dev/null; then
-                                echo "[STATUS] : INSTALADO Y OPERATIVO"
-                                echo "Ruta binary  : $(which ansible)"
-                                echo "Versión      : $(ansible --version | head -n 1)"
-                                echo "Python Ver   : $(ansible --version | grep 'python version')"
-                                echo "Config File  : $(ansible --version | grep 'config file')"
-                                echo ""
-                                echo "[-] Búsqueda rápida de Playbooks y Roles en $HOME:"
-                                local pb_files=$(find $HOME -type f \( -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | grep -iE 'playbook|ansible' | head -n 10)
-                                if [[ -n "$pb_files" ]]; then
-                                    echo "$pb_files"
-                                else
-                                    echo "[i] No se detectaron archivos de playbook evidentes en $HOME."
-                                fi
-                            else
-                                echo "[STATUS] : NO INSTALADO"
-                                echo ""
-                                prompt_input "¿Deseas instalar Ansible ahora? (s/n): " inst_ansible
-                                if [[ "$inst_ansible" == "s" || "$inst_ansible" == "S" ]]; then
-                                    echo "[-] Instalando Ansible..."
-                                    if command -v apt &> /dev/null; then
-                                        sudo apt update && sudo apt install -y ansible
-                                    elif command -v dnf &> /dev/null; then
-                                        sudo dnf install -y ansible-core || sudo dnf install -y ansible
-                                    fi
-                                    log_action "Instalación completada: Ansible."
-                                fi
-                            fi
-                            log_action "Diagnóstico Ansible ejecutado."
-                            pause_screen
-                            ;;
-                        2)
-                            echo ""
-                            echo "=========================================="
-                            echo "          DIAGNÓSTICO DE TERRAFORM"
-                            echo "=========================================="
-                            if command -v terraform &> /dev/null; then
-                                echo "[STATUS] : INSTALADO Y OPERATIVO"
-                                echo "Ruta binary  : $(which terraform)"
-                                echo "Versión      : $(terraform version | head -n 1)"
-                                echo ""
-                                echo "[-] Búsqueda rápida de proyectos Terraform (.tf) en $HOME:"
-                                local tf_files=$(find $HOME -type f -name "*.tf" 2>/dev/null | head -n 10)
-                                if [[ -n "$tf_files" ]]; then
-                                    echo "$tf_files"
-                                else
-                                    echo "[i] No se detectaron archivos .tf en $HOME."
-                                fi
-                            else
-                                echo "[STATUS] : NO INSTALADO"
-                                echo ""
-                                prompt_input "¿Deseas instalar Terraform (HashiCorp Repo) ahora? (s/n): " inst_tf
-                                if [[ "$inst_tf" == "s" || "$inst_tf" == "S" ]]; then
-                                    echo "[-] Configurando repositorio oficial e instalando Terraform..."
-                                    if command -v dnf &> /dev/null; then
-                                        sudo dnf install -y dnf-plugins-core
-                                        sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
-                                        sudo dnf install -y terraform
-                                    elif command -v apt &> /dev/null; then
-                                        wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-                                        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-                                        sudo apt update && sudo apt install -y terraform
-                                    fi
-                                    log_action "Instalación completada: Terraform."
-                                fi
-                            fi
-                            log_action "Diagnóstico Terraform ejecutado."
-                            pause_screen
-                            ;;
-                        3) break ;;
-                    esac
-                done
+                echo "1) Ansible Status | 2) Terraform Status"
+                prompt_input "Elige [1-2]: " aut_opt
+                case $aut_opt in
+                    1) command -v ansible &> /dev/null && ansible --version || echo "Ansible no instalado" ;;
+                    2) command -v terraform &> /dev/null && terraform version || echo "Terraform no instalado" ;;
+                esac
+                pause_screen
                 ;;
             7)
                 while true; do
                     clear
                     echo "=========================================="
-                    echo "    DIAGNÓSTICO Y PRUEBAS DE RED LOCAL"
+                    echo "    DIAGNÓSTICO Y PRUEBAS DE RED AVANZADAS"
                     echo "=========================================="
-                    echo "1) Direcciones IP y Rutas de red (ip a / ip route)"
-                    echo "2) Prueba de latencia y conectividad (ping)"
-                    echo "3) Trazado de ruta hacia host/IP (traceroute / tracepath)"
-                    echo "4) Diagnóstico HTTP/HTTPS y cabeceras (curl)"
-                    echo "5) Verificación y resolución DNS (nslookup / dig / resolv.conf)"
-                    echo "6) Puertos locales escuchando en el sistema (ss -tulpn)"
-                    echo "7) Volver al menú principal"
+                    echo "1) Test HTTP/HTTPS detallado (curl con cabeceras y tiempos)"
+                    echo "2) Prueba de conectividad ICMP avanzada (ping con conteo personalizable)"
+                    echo "3) Verificación de puerto remoto abierto (nc / /dev/tcp)"
+                    echo "4) Trazado de ruta (traceroute / tracepath)"
+                    echo "5) Resolución y consulta DNS (dig / nslookup)"
+                    echo "6) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-7]: " net_opt
+                    prompt_input "Elige una opción [1-6]: " net_adv_opt
 
-                    case $net_opt in
+                    case $net_adv_opt in
                         1)
                             echo ""
-                            echo "[-] Interfaces de red y direcciones IP:"
-                            ip -brief address
-                            echo ""
-                            echo "[-] Tabla de ruteo por defecto:"
-                            ip route
+                            prompt_input "Ingresa la URL o IP objetivo (ej: https://google.com): " c_url
+                            if [[ -n "$c_url" ]]; then
+                                echo "[-] Ejecutando análisis HTTP detallado..."
+                                echo "------------------------------------------"
+                                curl -I -L -s -w "\n[Métricas]\nTiempo total: %{time_total}s\nCódigo HTTP: %{http_code}\nIP Remota: %{remote_ip}\n" "$c_url"
+                                log_action "Red Avanzada: Curl detallado a $c_url"
+                            fi
                             pause_screen
                             ;;
                         2)
                             echo ""
-                            prompt_input "Ingresa la IP o Dominio a probar (ej: 8.8.8.8 o google.com): " ping_target
-                            if [[ -n "$ping_target" ]]; then
-                                echo "[-] Enviando 4 paquetes ICMP a '$ping_target'..."
-                                ping -c 4 "$ping_target"
-                                log_action "Red: Ping ejecutado hacia $ping_target"
+                            prompt_input "Ingresa la IP o Dominio destino: " p_host
+                            if [[ -n "$p_host" ]]; then
+                                prompt_input "Cantidad de paquetes a enviar [Por defecto: 4]: " p_count
+                                p_count="${p_count:-4}"
+                                echo "[-] Enviando $p_count paquetes ICMP a '$p_host'..."
+                                ping -c "$p_count" "$p_host"
+                                log_action "Red Avanzada: Ping a $p_host ($p_count paquetes)"
                             fi
                             pause_screen
                             ;;
                         3)
                             echo ""
-                            prompt_input "Ingresa la IP o Dominio a trazar: " trace_target
-                            if [[ -n "$trace_target" ]]; then
-                                if command -v traceroute &> /dev/null; then
-                                    traceroute "$trace_target"
-                                elif command -v tracepath &> /dev/null; then
-                                    tracepath "$trace_target"
+                            prompt_input "Ingresa la IP o Host remoto: " r_host
+                            prompt_input "Ingresa el puerto a verificar (ej: 80, 443, 22): " r_port
+                            if [[ -n "$r_host" && -n "$r_port" ]]; then
+                                echo "[-] Probando conectividad hacia $r_host en el puerto $r_port..."
+                                if command -v nc &> /dev/null; then
+                                    nc -zv -w 3 "$r_host" "$r_port"
                                 else
-                                    echo "[!] Ni traceroute ni tracepath están instalados."
+                                    if (echo >/dev/tcp/"$r_host"/"$r_port") &>/dev/null; then
+                                        echo "[OK] Puerto $r_port en $r_host está ABIERTO y accesible."
+                                    else
+                                        echo "[!] No se pudo conectar al puerto $r_port en $r_host (Cerrado o filtrado)."
+                                    fi
                                 fi
-                                log_action "Red: Traceroute a $trace_target"
+                                log_action "Red Avanzada: Test puerto $r_port en $r_host"
                             fi
                             pause_screen
                             ;;
                         4)
                             echo ""
-                            prompt_input "Ingresa la URL objetivo (ej: https://google.com): " curl_target
-                            if [[ -n "$curl_target" ]]; then
-                                echo "[-] Obteniendo cabeceras HTTP y código de respuesta..."
-                                curl -I -L -s "$curl_target" | head -n 20
-                                log_action "Red: Curl cabeceras en $curl_target"
+                            prompt_input "Ingresa la IP o Dominio para trazado de ruta: " t_host
+                            if [[ -n "$t_host" ]]; then
+                                echo "[-] Trazando ruta hacia $t_host..."
+                                if command -v traceroute &> /dev/null; then
+                                    traceroute "$t_host"
+                                elif command -v tracepath &> /dev/null; then
+                                    tracepath "$t_host"
+                                else
+                                    echo "[!] Ni traceroute ni tracepath están instalados."
+                                fi
+                                log_action "Red Avanzada: Traceroute a $t_host"
                             fi
                             pause_screen
                             ;;
                         5)
                             echo ""
-                            echo "[-] Servidores DNS configurados (/etc/resolv.conf):"
-                            cat /etc/resolv.conf | grep nameserver
-                            echo ""
-                            prompt_input "Ingresa un dominio a resolver (ej: google.com): " dns_target
-                            if [[ -n "$dns_target" ]]; then
+                            prompt_input "Ingresa el dominio a consultar (ej: google.com): " d_host
+                            if [[ -n "$d_host" ]]; then
+                                echo "[-] Resolviendo registros DNS para $d_host..."
                                 if command -v dig &> /dev/null; then
-                                    dig +short "$dns_target"
+                                    dig "$d_host" ANY +noall +answer
                                 elif command -v nslookup &> /dev/null; then
-                                    nslookup "$dns_target"
+                                    nslookup "$d_host"
                                 else
-                                    getent ahosts "$dns_target"
+                                    getent ahosts "$d_host"
                                 fi
-                                log_action "Red: Consulta DNS de $dns_target"
+                                log_action "Red Avanzada: Consulta DNS de $d_host"
                             fi
                             pause_screen
                             ;;
-                        6)
-                            echo ""
-                            echo "[-] Puertos TCP/UDP en escucha activa:"
-                            sudo ss -tulpn | grep LISTEN
-                            pause_screen
-                            ;;
-                        7) break ;;
+                        6) break ;;
                     esac
                 done
                 ;;
