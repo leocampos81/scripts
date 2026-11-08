@@ -371,7 +371,7 @@ menu() {
                     esac
                 done
                 ;;
-	4)
+            4)
                 while true; do
                     clear
                     echo "=========================================="
@@ -430,21 +430,20 @@ menu() {
                                 2)
                                     echo ""
                                     echo "[-] Preparando subida al repositorio remoto..."
-                                    prompt_input "Ingresa el mensaje para el commit (ej: 'Actualiza menu.sh'): " git_msg
-                                    if [[ -n "$git_msg" ]]; then
-                                        echo "[-] Agregando archivos modificados (git add .)..."
-                                        git add .
-                                        echo "[-] Generando commit..."
-                                        git commit -m "$git_msg"
-                                        echo "[-] Ejecutando 'git push origin main'..."
-                                        if git push origin main; then
-                                            echo "[OK] Cambios subidos y sincronizados correctamente."
-                                            log_action "Git: Push ejecutado con mensaje: '$git_msg'"
-                                        else
-                                            echo "[!] Error al subir los cambios al repositorio remoto."
-                                        fi
+                                    local default_msg="Actualiza prom.sh"
+                                    prompt_input "Ingresa el mensaje para el commit [Por defecto: '$default_msg']: " git_msg
+                                    git_msg="${git_msg:-$default_msg}"
+
+                                    echo "[-] Agregando archivos modificados (git add .)..."
+                                    git add .
+                                    echo "[-] Generando commit..."
+                                    git commit -m "$git_msg"
+                                    echo "[-] Ejecutando 'git push origin main'..."
+                                    if git push origin main; then
+                                        echo "[OK] Cambios subidos y sincronizados correctamente."
+                                        log_action "Git: Push ejecutado con mensaje: '$git_msg'"
                                     else
-                                        echo "[!] Operación cancelada: el mensaje de commit no puede estar vacío."
+                                        echo "[!] Error al subir los cambios al repositorio remoto."
                                     fi
                                     ;;
                                 3)
@@ -457,7 +456,7 @@ menu() {
                     esac
                 done
                 ;;
-	5)
+            5)
                 while true; do
                     clear
                     echo "=========================================="
@@ -749,4 +748,5 @@ menu() {
         esac
     done
 }
+
 menu
