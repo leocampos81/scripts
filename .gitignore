@@ -1,1 +1,4 @@
 sysadmin.log
+sysadmin.log
+*.log
+logs/
