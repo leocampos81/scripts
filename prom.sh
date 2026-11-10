@@ -98,9 +98,9 @@ menu() {
                             echo "=========================================="
                             echo "        EDITOR DE ARCHIVOS LOCALES"
                             echo "=========================================="
-                            echo "1) nvim"
-                            echo "2) nano"
-                            echo "3) vi"
+                            echo " 1) nvim"
+                            echo " 2) nano"
+                            echo " 3) vi"
                             prompt_input "Selecciona el editor [1-3]: " ed_opt
                             prompt_input "Ruta del archivo a editar: " target_file
                             
@@ -199,10 +199,10 @@ menu() {
                                 
                                 echo ""
                                 echo "Servicio seleccionado: $svc_target"
-                                echo "1) Consultar estado (status)"
-                                echo "2) Iniciar servicio (start)"
-                                echo "3) Reiniciar servicio (restart)"
-                                echo "4) Detener servicio (stop)"
+                                echo " 1) Consultar estado (status)"
+                                echo " 2) Iniciar servicio (start)"
+                                echo " 3) Reiniciar servicio (restart)"
+                                echo " 4) Detener servicio (stop)"
                                 prompt_input "Elige la acción [1-4]: " act_svc
                                 
                                 case $act_svc in
@@ -238,10 +238,10 @@ menu() {
                             echo "=========================================="
                             echo "       RECURSOS Y PROCESOS LOCALES"
                             echo "=========================================="
-                            echo "1) Top 10 procesos por CPU"
-                            echo "2) Top 10 procesos por Memoria"
-                            echo "3) Memoria RAM y Swap en uso (free -h)"
-                            echo "4) Monitor interactivo básico (top)"
+                            echo " 1) Top 10 procesos por CPU"
+                            echo " 2) Top 10 procesos por Memoria"
+                            echo " 3) Memoria RAM y Swap en uso (free -h)"
+                            echo " 4) Monitor interactivo básico (top)"
                             prompt_input "Selecciona opción [1-4]: " res_opt
                             case $res_opt in
                                 1) ps aux --sort=-%cpu | head -n 11 ;;
@@ -263,10 +263,10 @@ menu() {
                             echo "=========================================="
                             echo "           RED Y CONECTIVIDAD BÁSICA"
                             echo "=========================================="
-                            echo "1) Direcciones IP e interfaces (ip a)"
-                            echo "2) Tabla de ruteo (ip route)"
-                            echo "3) Puertos locales en escucha (ss -tulpn)"
-                            echo "4) Prueba rápida de conectividad (ping)"
+                            echo " 1) Direcciones IP e interfaces (ip a)"
+                            echo " 2) Tabla de ruteo (ip route)"
+                            echo " 3) Puertos locales en escucha (ss -tulpn)"
+                            echo " 4) Prueba rápida de conectividad (ping)"
                             prompt_input "Selecciona opción [1-4]: " net_choice
                             case $net_choice in
                                 1) ip -brief address ;;
@@ -289,9 +289,10 @@ menu() {
                     echo "=========================================="
                     echo "   MONITOREO AVANZADO DE RECURSOS"
                     echo "=========================================="
-                    echo "1) btop (Monitor moderno)"
-                    echo "2) htop (Monitor por procesos)"
-                    echo "q) Volver al menú principal"
+                    echo " 1) btop (Monitor moderno)"
+                    echo " 2) htop (Monitor por procesos)"
+		    echo ""
+                    echo " q) Volver al menú principal"
                     echo "=========================================="
                     prompt_input "Elige una opción [1-2 o q]: " sub_opt
                     case $sub_opt in
@@ -313,12 +314,13 @@ menu() {
                         break
                     fi
 
-                    echo "1) Ver contenedores activos (docker ps)"
-                    echo "2) Monitoreo de CPU/RAM en tiempo real (docker stats)"
-                    echo "3) Inspeccionar logs de un contenedor"
-                    echo "4) Reiniciar / Detener / Iniciar contenedor"
-                    echo "5) Limpieza general (docker system prune)"
-                    echo "q) Volver al menú principal"
+                    echo " 1) Ver contenedores activos (docker ps)"
+                    echo " 2) Monitoreo de CPU/RAM en tiempo real (docker stats)"
+                    echo " 3) Inspeccionar logs de un contenedor"
+                    echo " 4) Reiniciar / Detener / Iniciar contenedor"
+                    echo " 5) Limpieza general (docker system prune)"
+		    echo ""
+                    echo " q) Volver al menú principal"
                     echo "=========================================="
                     prompt_input "Elige una opción [1-5 o q]: " d_opt
 
@@ -363,9 +365,10 @@ menu() {
                     echo "=========================================="
                     echo "   MANTENIMIENTO Y SINCRONIZACIÓN GIT"
                     echo "=========================================="
-                    echo "1) Actualizar paquetes de sistema (apt/dnf)"
-                    echo "2) Sincronizar repositorio de scripts (Git Pull/Push)"
-                    echo "q) Volver al menú principal"
+                    echo " 1) Actualizar paquetes de sistema (apt/dnf)"
+                    echo " 2) Sincronizar repositorio de scripts (Git Pull/Push)"
+                    echo ""
+		    echo " q) Volver al menú principal"
                     echo "=========================================="
                     prompt_input "Elige una opción [1-2 o q]: " sub_opt
                     case $sub_opt in
@@ -403,16 +406,17 @@ menu() {
                     echo "=========================================="
                     echo "       UTILIDADES VARIAS Y SERVICIOS CLI"
                     echo "=========================================="
-                    echo "1) Clima actual completo (wttr.in)"
-                    echo "2) Clima compacto de una línea (wttr.in/?format=3)"
-                    echo "3) Fase lunar actual (wttr.in/moon)"
-                    echo "4) IP pública directa (ifconfig.me / ipinfo.io)"
-                    echo "5) Generar Contraseña segura local (openssl)"
-                    echo "6) Generar UUID v4 único"
-                    echo "7) Generar código QR en terminal (mkqr / qrencode)"
-                    echo "8) Diccionario / Definición de palabras (dict.org)"
-                    echo "9) Hojas de ayuda rápida de comandos (cht.sh)"
-                    echo "q) Volver al menú principal"
+                    echo " 1) Clima actual completo (wttr.in)"
+                    echo " 2) Clima compacto de una línea (wttr.in/?format=3)"
+                    echo " 3) Fase lunar actual (wttr.in/moon)"
+                    echo " 4) IP pública directa (ifconfig.me / ipinfo.io)"
+                    echo " 5) Generar Contraseña segura local (openssl)"
+                    echo " 6) Generar UUID v4 único"
+                    echo " 7) Generar código QR en terminal (mkqr / qrencode)"
+                    echo " 8) Diccionario / Definición de palabras (dict.org)"
+                    echo " 9) Hojas de ayuda rápida de comandos (cht.sh)"
+                    echo ""
+		    echo " q) Volver al menú principal"
                     echo "=========================================="
                     prompt_input "Elige una opción [1-9 o q]: " util_opt
                     case $util_opt in
@@ -509,9 +513,10 @@ menu() {
                     echo "=========================================="
                     echo "      HERRAMIENTAS DE AUTOMATIZACIÓN"
                     echo "=========================================="
-                    echo "1) Ansible Status"
-                    echo "2) Terraform Status"
-                    echo "q) Volver al menú principal"
+                    echo " 1) Ansible Status"
+                    echo " 2) Terraform Status"
+                    echo ""
+		    echo " q) Volver al menú principal"
                     echo "=========================================="
                     prompt_input "Elige una opción [1-2 o q]: " aut_opt
                     case $aut_opt in
@@ -527,12 +532,13 @@ menu() {
                     echo "=========================================="
                     echo "    DIAGNÓSTICO Y PRUEBAS DE RED AVANZADAS"
                     echo "=========================================="
-                    echo "1) Test HTTP/HTTPS detallado (curl con cabeceras y tiempos)"
-                    echo "2) Prueba de conectividad ICMP avanzada (ping con conteo personalizable)"
-                    echo "3) Verificación de puerto remoto abierto (nc / /dev/tcp)"
-                    echo "4) Trazado de ruta (traceroute / tracepath)"
-                    echo "5) Resolución y consulta DNS (dig / nslookup)"
-                    echo "q) Volver al menú principal"
+                    echo " 1) Test HTTP/HTTPS detallado (curl con cabeceras y tiempos)"
+                    echo " 2) Prueba de conectividad ICMP avanzada (ping con conteo personalizable)"
+                    echo " 3) Verificación de puerto remoto abierto (nc / /dev/tcp)"
+                    echo " 4) Trazado de ruta (traceroute / tracepath)"
+                    echo " 5) Resolución y consulta DNS (dig / nslookup)"
+                    echo ""
+		    echo " q) Volver al menú principal"
                     echo "=========================================="
                     prompt_input "Elige una opción [1-5 o q]: " net_adv_opt
 
@@ -646,11 +652,12 @@ menu() {
                     echo "=========================================="
                     echo "[STATUS] : INSTALADO Y OPERATIVO ($(nmap --version | head -n 1))"
                     echo "------------------------------------------"
-                    echo "1) Escaneo rápido de puertos abiertos en IP/Host"
-                    echo "2) Escaneo completo con detección de versiones (-sV)"
-                    echo "3) Escaneo agresivo (SO, versiones y scripts -A)"
-                    echo "4) Escaneo de red local (descubrimiento de hosts activos)"
-                    echo "q) Volver al menú principal"
+                    echo " 1) Escaneo rápido de puertos abiertos en IP/Host"
+                    echo " 2) Escaneo completo con detección de versiones (-sV)"
+                    echo " 3) Escaneo agresivo (SO, versiones y scripts -A)"
+                    echo " 4) Escaneo de red local (descubrimiento de hosts activos)"
+                    echo ""
+		    echo " q) Volver al menú principal"
                     echo "=========================================="
                     prompt_input "Elige una opción [1-4 o q]: " nmap_opt
 
