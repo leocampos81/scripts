@@ -1,8 +1,39 @@
 #!/usr/bin/env zsh
 
 # ==============================================================================
-#  PROMETHERION2112 - SYSADMIN TOOLKIT & DASHBOARD  (v3.2 - ds edition)
+#  PROMETHERION2112 - SYSADMIN TOOLKIT & DASHBOARD
 #  Repositorio: git@github.com:leocampos81/scripts.git
+#  Autor: Leonardo Campos (https://github.com/leocampos81)
+# ==============================================================================
+#  BITÁCORA DE CAMBIOS (CHANGELOG)
+# ==============================================================================
+#  [2026-11-09] - v3.0 (Rama DS)
+#    * Refactorización mayor de utilidades.
+#    * Implementada detección inteligente de gestor de paquetes (apt, dnf, pacman, 
+#      zypper, apk).
+#    * Nueva función ensure_pkg() para autoinstalación de dependencias (whois, nmap, 
+#      rsync, jq, etc.) con confirmación del usuario.
+#    * Añadida protección trap para restaurar stty en Ctrl+C.
+#    * UUID ahora se genera localmente (sin peticiones HTTP).
+#    * Mejorado el manejo de errores en git (ya no cierra el script).
+#    * Añadidas nuevas utilidades de red y consultas (Wikipedia, cripto, etc.).
+#
+#  [2026-11-10] - v3.2 (Rama DS)
+#    * Rediseño total de la Opción 3 (Sección 1): Análisis técnico de archivos.
+#      Ahora muestra un cuadro formateado con identidad, fechas, métricas de 
+#      contenido (wc) y análisis de densidad (líneas vacías, longitud máxima, etc.).
+#    * Corrección de sintaxis en stat para las fechas de estado.
+#
+#  [2026-11-10] - v3.3 (Rama DS)
+#    * Mejorado el test de velocidad de Cloudflare (Opción 11, Sección 7).
+#      Ahora descarga 25MB, simula navegador (User-Agent) y muestra tiempo total.
+#
+#  [2026-11-10] - v3.4 (Rama DS)
+#    * Rediseño visual de la Sección 7 (Red Avanzada):
+#      - Opción 6 (IP Pública): Ahora usa jq para mostrar un cuadro formateado
+#        con IP, Ciudad, Región, País, ISP y Zona Horaria.
+#      - Opción 8 (Certificado SSL): Extrae CN, Emisor y Fechas en un cuadro.
+#      - Opción 9 (Estado HTTP): Muestra tabla de tiempos de red (DNS, TCP, TLS).
 # ==============================================================================
 
 # --- Rutas y variables globales -----------------------------------------------
@@ -234,14 +265,17 @@ menu() {
                                 echo "┌──────────────────────────────────────────────────┐"
                                 echo "│ FECHAS DE ESTADO                                 │"
                                 echo "├──────────────────────────────────────────────────┤"
-                                stat -c "│ Modificado : %-36s │" "%y"
-                                stat -c "│ Accedido   : %-36s │" "%x"
-                                # Algunos sistemas de archivos no guardan la fecha de creación
-                                local f_create=$(stat -c "%w" "$info_file")
-                                if [[ "$f_create" == "-" ]]; then
-                                    printf "│ Creado     : %-36s │\n" "No disponible (FS)"
+                                local f_mod=$(stat -c "%y" "$info_file")
+                                local f_acc=$(stat -c "%x" "$info_file")
+                                local f_cre=$(stat -c "%w" "$info_file")
+                                
+                                printf "│ Modificado : %-36.36s │\n" "$f_mod"
+                                printf "│ Accedido   : %-36.36s │\n" "$f_acc"
+                                
+                                if [[ "$f_cre" == "-" ]]; then
+                                    printf "│ Creado     : %-36.36s │\n" "No disponible (FS)"
                                 else
-                                    printf "│ Creado     : %-36s │\n" "$f_create"
+                                    printf "│ Creado     : %-36.36s │\n" "$f_cre"
                                 fi
                                 echo "└──────────────────────────────────────────────────┘"
 
@@ -253,7 +287,6 @@ menu() {
                                 local wc_bytes=${wc_data[3]}
                                 local wc_chars=${wc_data[4]}
                                 
-                                # Análisis extra: Longitud de la línea más larga y líneas vacías
                                 local awk_out=$(awk '{ 
                                     if (length($0) > max) max = length($0); 
                                     if (length($0) == 0) empty++; 
@@ -262,7 +295,6 @@ menu() {
                                 local max_line_len=$(echo "$awk_out" | awk '{print $1}')
                                 local empty_lines=$(echo "$awk_out" | awk '{print $2}')
                                 
-                                # Calcular promedio de palabras por línea
                                 local avg_words=0
                                 if [[ "$wc_lines" -gt 0 ]]; then
                                     avg_words=$(awk "BEGIN {printf \"%.2f\", $wc_words / $wc_lines}")
@@ -751,12 +783,12 @@ menu() {
                     echo " 5) Resolución y consulta DNS (dig / nslookup)"
                     echo ""
                     echo "--- IDENTIDAD Y METADATOS DE RED ---"
-                    echo " 6) IP pública y detalles (ifconfig.me / ipinfo.io)"
+                    echo " 6) IP pública y detalles (ficha técnica)"
                     echo " 7) WHOIS de dominio o IP (con autoinstalación)"
-                    echo " 8) Certificado SSL de un dominio"
+                    echo " 8) Certificado SSL de un dominio (ficha técnica)"
                     echo ""
                     echo "--- UTILIDADES WEB ---"
-                    echo " 9) Verificar estado HTTP de un sitio"
+                    echo " 9) Verificar estado HTTP y tiempos (ficha técnica)"
                     echo "10) Acortar URL (tinyurl)"
                     echo "11) Test de velocidad de descarga (Cloudflare)"
                     echo ""
@@ -847,14 +879,30 @@ menu() {
                             ;;
                         6)
                             echo ""
-                            echo "[-] IP Pública (ifconfig.me):"
-                            ccurl "https://ifconfig.me" || ccurl "https://api.ipify.org"
-                            echo ""
-                            echo ""
-                            echo "--- Detalles geográficos (ipinfo.io) ---"
-                            ccurl "https://ipinfo.io/json"
-                            echo ""
-                            log_action "Red Avanzada: IP pública"
+                            if need jq; then
+                                echo "[-] Obteniendo información de red..."
+                                local ip_json=$(ccurl "https://ipinfo.io/json")
+                                local ip=$(echo "$ip_json" | jq -r '.ip // "N/A"')
+                                local city=$(echo "$ip_json" | jq -r '.city // "N/A"')
+                                local region=$(echo "$ip_json" | jq -r '.region // "N/A"')
+                                local country=$(echo "$ip_json" | jq -r '.country // "N/A"')
+                                local org=$(echo "$ip_json" | jq -r '.org // "N/A"')
+                                local tz=$(echo "$ip_json" | jq -r '.timezone // "N/A"')
+                                
+                                echo ""
+                                echo "┌──────────────────────────────────────────────────┐"
+                                echo "│ FICHA TÉCNICA DE RED (IP PÚBLICA)                │"
+                                echo "├──────────────────────────────────────────────────┤"
+                                printf "│ IP Pública : %-36.36s │\n" "$ip"
+                                printf "│ Ciudad     : %-36.36s │\n" "$city"
+                                printf "│ Región     : %-36.36s │\n" "$region"
+                                printf "│ País       : %-36.36s │\n" "$country"
+                                printf "│ ISP / Org  : %-36.36s │\n" "$org"
+                                printf "│ Zona Horaria: %-35.35s │\n" "$tz"
+                                echo "└──────────────────────────────────────────────────┘"
+                                
+                                log_action "Red Avanzada: Ficha IP pública"
+                            fi
                             pause_screen
                             ;;
                         7)
@@ -873,8 +921,28 @@ menu() {
                             prompt_input "Dominio para inspeccionar certificado SSL: " ssl_host
                             if [[ -n "$ssl_host" ]]; then
                                 echo "[-] Consultando certificado de $ssl_host:443..."
-                                echo | openssl s_client -servername "$ssl_host" -connect "$ssl_host:443" 2>/dev/null \
-                                    | openssl x509 -noout -subject -issuer -dates
+                                
+                                local ssl_out=$(echo | openssl s_client -servername "$ssl_host" -connect "$ssl_host:443" 2>/dev/null | openssl x509 -noout -subject -issuer -dates 2>/dev/null)
+                                
+                                if [[ -n "$ssl_out" ]]; then
+                                    local subj=$(echo "$ssl_out" | grep "subject=" | sed 's/subject=//')
+                                    local issu=$(echo "$ssl_out" | grep "issuer=" | sed 's/issuer=//')
+                                    local not_b=$(echo "$ssl_out" | grep "notBefore=" | sed 's/notBefore=//')
+                                    local not_a=$(echo "$ssl_out" | grep "notAfter=" | sed 's/notAfter=//')
+                                    
+                                    echo ""
+                                    echo "┌──────────────────────────────────────────────────┐"
+                                    echo "│ FICHA TÉCNICA DE CERTIFICADO SSL                 │"
+                                    echo "├──────────────────────────────────────────────────┤"
+                                    printf "│ Dominio    : %-36.36s │\n" "$ssl_host"
+                                    printf "│ Subject    : %-36.36s │\n" "$subj"
+                                    printf "│ Issuer     : %-36.36s │\n" "$issu"
+                                    printf "│ Válido desde: %-35.35s │\n" "$not_b"
+                                    printf "│ Válido hasta: %-35.35s │\n" "$not_a"
+                                    echo "└──────────────────────────────────────────────────┘"
+                                else
+                                    echo "[!] No se pudo obtener el certificado (posible bloqueo de red o dominio inválido)."
+                                fi
                                 log_action "Red Avanzada: SSL cert $ssl_host"
                             fi
                             pause_screen
@@ -885,8 +953,35 @@ menu() {
                             if [[ -n "$check_url" ]]; then
                                 [[ "$check_url" != http* ]] && check_url="https://$check_url"
                                 echo "[-] Verificando estado HTTP..."
-                                code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 -L "$check_url")
-                                echo "Código HTTP: $code"
+                                
+                                # Realizamos la petición y capturamos los tiempos
+                                local metrics=$(curl -s -o /dev/null -L -w \
+                                    "%{http_code}|%{time_namelookup}|%{time_connect}|%{time_appconnect}|%{time_starttransfer}|%{time_total}" \
+                                    --max-time 10 "$check_url")
+                                
+                                local code=$(echo "$metrics" | cut -d'|' -f1)
+                                local t_dns=$(echo "$metrics" | cut -d'|' -f2)
+                                local t_tcp=$(echo "$metrics" | cut -d'|' -f3)
+                                local t_tls=$(echo "$metrics" | cut -d'|' -f4)
+                                local t_ttfb=$(echo "$metrics" | cut -d'|' -f5)
+                                local t_total=$(echo "$metrics" | cut -d'|' -f6)
+                                
+                                echo ""
+                                echo "┌──────────────────────────────────────────────────┐"
+                                echo "│ FICHA TÉCNICA HTTP                               │"
+                                echo "├──────────────────────────────────────────────────┤"
+                                printf "│ URL Objetivo: %-36.36s │\n" "$check_url"
+                                printf "│ Código HTTP : %-36s │\n" "$code"
+                                echo "├──────────────────────────────────────────────────┤"
+                                printf "│ DNS Lookup  : %-32.4fs │\n" "$t_dns"
+                                printf "│ TCP Connect : %-32.4fs │\n" "$t_tcp"
+                                if [[ "$t_tls" != "0.000000" && "$t_tls" != "0.0000" ]]; then
+                                    printf "│ TLS Handshake: %-31.4fs │\n" "$t_tls"
+                                fi
+                                printf "│ TTFB (1er byte): %-29.4fs │\n" "$t_ttfb"
+                                printf "│ Tiempo Total: %-33.4fs │\n" "$t_total"
+                                echo "└──────────────────────────────────────────────────┘"
+                                
                                 log_action "Red Avanzada: Check HTTP $check_url -> $code"
                             fi
                             pause_screen
@@ -906,9 +1001,10 @@ menu() {
                             ;;
                         11)
                             echo ""
-                            echo "[-] Descargando 100MB de Cloudflare para medir velocidad..."
-                            curl -o /dev/null -s --max-time 30 -w 'Velocidad media: %{speed_download} B/s\n' \
-                                "https://speed.cloudflare.com/__down?bytes=100000000"
+                            echo "[-] Descargando 25MB de Cloudflare para medir velocidad..."
+                            curl -o /dev/null -s --max-time 15 -w 'Velocidad media: %{speed_download} B/s (Tiempo: %{time_total}s)\n' \
+                                -H "User-Agent: Mozilla/5.0" \
+                                "https://speed.cloudflare.com/__down?bytes=25000000"
                             log_action "Red Avanzada: Speedtest Cloudflare"
                             pause_screen
                             ;;
