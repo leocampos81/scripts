@@ -7,33 +7,15 @@
 # ==============================================================================
 #  BITÁCORA DE CAMBIOS (CHANGELOG)
 # ==============================================================================
-#  [2026-11-09] - v3.0 (Rama DS)
-#    * Refactorización mayor de utilidades.
-#    * Implementada detección inteligente de gestor de paquetes (apt, dnf, pacman, 
-#      zypper, apk).
-#    * Nueva función ensure_pkg() para autoinstalación de dependencias (whois, nmap, 
-#      rsync, jq, etc.) con confirmación del usuario.
-#    * Añadida protección trap para restaurar stty en Ctrl+C.
-#    * UUID ahora se genera localmente (sin peticiones HTTP).
-#    * Mejorado el manejo de errores en git (ya no cierra el script).
-#    * Añadidas nuevas utilidades de red y consultas (Wikipedia, cripto, etc.).
+#  [2026-11-09] - v3.0 a v3.9 (Rama DS)
+#    * Evolución del script: Health Check, autoinstalación de paquetes, 
+#      formatos de tabla, fichas técnicas de red, arreglos de DNF, etc.
 #
-#  [2026-11-10] - v3.2 (Rama DS)
-#    * Rediseño total de la Opción 3 (Sección 1): Análisis técnico de archivos.
-#      Ahora muestra un cuadro formateado con identidad, fechas, métricas de 
-#      contenido (wc) y análisis de densidad (líneas vacías, longitud máxima, etc.).
-#    * Corrección de sintaxis en stat para las fechas de estado.
-#
-#  [2026-11-10] - v3.3 (Rama DS)
-#    * Mejorado el test de velocidad de Cloudflare (Opción 11, Sección 7).
-#      Ahora descarga 25MB, simula navegador (User-Agent) y muestra tiempo total.
-#
-#  [2026-11-10] - v3.4 (Rama DS)
-#    * Rediseño visual de la Sección 7 (Red Avanzada):
-#      - Opción 6 (IP Pública): Ahora usa jq para mostrar un cuadro formateado
-#        con IP, Ciudad, Región, País, ISP y Zona Horaria.
-#      - Opción 8 (Certificado SSL): Extrae CN, Emisor y Fechas en un cuadro.
-#      - Opción 9 (Estado HTTP): Muestra tabla de tiempos de red (DNS, TCP, TLS).
+#  [2026-11-11] - v4.0 (Rama DS)
+#    * Rediseño total del Health Check (Opción 1):
+#      - Eliminados los cuadros de borde cerrado que se descuadraban.
+#      - Implementado formato de lista limpia con encabezados resaltados.
+#      - Alineación perfecta sin importar la longitud de los datos.
 # ==============================================================================
 
 # --- Rutas y variables globales -----------------------------------------------
@@ -154,22 +136,136 @@ menu() {
         echo "[*] Servidor actual: $sistema_actual"
         echo "[*] Gestor paquetes: $PKG_MGR"
         echo "=========================================================="
-        echo " 1) Herramientas Nativas del Sistema (Archivos, Servicios, Red, Monitoreo)"
-        echo " 2) Monitoreo Avanzado de Recursos (btop, ps top CPU/RAM)"
-        echo " 3) Servicios y Contenedores Docker (Avanzado)"
-        echo " 4) Mantenimiento de Sistema y Sincronización Git"
-        echo " 5) Utilidades Locales y Consultas (Clima, QR, Credenciales)"
-        echo " 6) Herramientas de Automatización (Ansible, Terraform)"
-        echo " 7) Diagnóstico y Pruebas de Red Avanzadas"
-        echo " 8) Auditoría de Red y Seguridad (Nmap)"
+        echo " 1) Panorama general del servidor (Health Check)"
+        echo " 2) Herramientas Nativas (Archivos, Servicios, Red, Monitoreo)"
+        echo " 3) Monitoreo Avanzado de Recursos (btop, ps top CPU/RAM)"
+        echo " 4) Servicios y Contenedores Docker (Avanzado)"
+        echo " 5) Mantenimiento de Sistema y Sincronización Git"
+        echo " 6) Utilidades Locales y Consultas (Clima, QR, Credenciales)"
+        echo " 7) Herramientas de Automatización (Ansible, Terraform)"
+        echo " 8) Diagnóstico y Pruebas de Red Avanzadas"
+        echo " 9) Auditoría de Red y Seguridad (Nmap)"
         echo ""
-        echo " 9) Salir (o presiona 'q')"
+        echo " q) Salir (o presiona 'q')"
         echo "=========================================================="
 
         prompt_input "LEO-DASHBOARD > Elige una opción [1-9 o q]: " opt
 
         case $opt in
             1)
+                clear
+                echo "===================================================================="
+                echo "               PANORAMA GENERAL DEL SERVIDOR (HEALTH)               "
+                echo "===================================================================="
+                echo ""
+                
+                # --- 1. SISTEMA Y HARDWARE ---
+                local os_name=$(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)
+                local kernel=$(uname -r | sed 's/\.x86_64//')
+                local arch=$(uname -m)
+                local uptime=$(uptime -p | sed 's/up //')
+                local cpu_model=$(lscpu 2>/dev/null | grep 'Model name' | cut -d: -f2 | xargs | sed 's/ CPU.*//')
+                local cpu_cores=$(nproc)
+                local ram_total=$(free -h | awk '/^Mem:/{print $2}')
+                local ram_used=$(free -h | awk '/^Mem:/{print $3}')
+                local swap_total=$(free -h | awk '/^Swap:/{print $2}')
+                local swap_used=$(free -h | awk '/^Swap:/{print $3}')
+                
+                echo "--- SISTEMA Y HARDWARE ---------------------------------------------"
+                echo " Hostname    : $(hostname)"
+                echo " OS          : $os_name"
+                echo " Kernel      : $kernel ($arch)"
+                echo " Uptime      : $uptime"
+                echo " CPU         : $cpu_model"
+                echo " Núcleos     : $cpu_cores vCPU"
+                echo " RAM         : $ram_used / $ram_total en uso"
+                if [[ "$swap_used" != "0B" && "$swap_used" != "0" ]]; then
+                    echo " Swap        : ¡ALERTA! $swap_used de $swap_total en uso"
+                else
+                    echo " Swap        : No utilizado ($swap_total)"
+                fi
+                echo ""
+
+                # --- 2. ACTUALIZACIONES PENDIENTES ---
+                local updates_pending=0
+                if [[ "$PKG_MGR" == "apt" ]]; then
+                    updates_pending=$(apt list --upgradable 2>/dev/null | grep -c "upgradable")
+                elif [[ "$PKG_MGR" == "dnf" ]]; then
+                    updates_pending=$(dnf -C -q check-update 2>/dev/null | grep -c "^[a-zA-Z0-9]")
+                fi
+                
+                echo "--- ACTUALIZACIONES DEL SISTEMA ------------------------------------"
+                if [[ $updates_pending -gt 0 ]]; then
+                    echo " [!] Paquetes pendientes: $updates_pending actualizaciones"
+                else
+                    echo " [OK] Sistema actualizado (sin pendientes)"
+                fi
+                echo ""
+
+                # --- 3. ALMACENAMIENTO ---
+                echo "--- ALMACENAMIENTO -------------------------------------------------"
+                df -h -x tmpfs -x devtmpfs -x squashfs | awk 'NR>1 {
+                    printf " %-22s %-10s %-10s %-10s %-6s\n", "Montaje: "$6, "Total: "$2, "Usado: "$3, "Disp: "$4, "Uso: "$5
+                }'
+                echo ""
+
+                # --- 4. RED ---
+                local primary_iface=$(ip route show default | awk '{print $5}' | head -n 1)
+                local primary_ip=$(ip -4 addr show "$primary_iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+                local gateway=$(ip route show default | awk '{print $3}' | head -n 1)
+                
+                echo "--- CONECTIVIDAD DE RED PRINCIPAL ----------------------------------"
+                echo " Interfaz    : ${primary_iface:-N/A}"
+                echo " IP Local    : ${primary_ip:-N/A}"
+                echo " Gateway     : ${gateway:-N/A}"
+                echo ""
+
+                # --- 5. SERVICIOS CRÍTICOS ---
+                echo "--- SERVICIOS CRÍTICOS (Activos) -----------------------------------"
+                local critical_services=(
+                    "ssh" "sshd" "docker" "cron" "crond" 
+                    "systemd-resolved" "firewalld" "ufw" 
+                    "NetworkManager" "network" "chronyd" "ntp" 
+                    "auditd" "rsyslog" "nginx" "apache2" "httpd" 
+                    "mariadb" "mysql" "postgresql"
+                )
+                local active_found=0
+                for svc in "${critical_services[@]}"; do
+                    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+                        echo " [ OK ] $svc"
+                        active_found=1
+                    fi
+                done
+                if [[ $active_found -eq 0 ]]; then
+                    echo " No se detectaron servicios críticos corriendo."
+                fi
+                echo ""
+
+                # --- 6. PROCESOS Y CARGA ---
+                local load_avg=$(cat /proc/loadavg | awk '{print $1 ", " $2 ", " $3}')
+                local total_procs=$(ps -e --no-headers | wc -l)
+                local zombie_procs=$(ps -eo stat --no-headers | grep -c '^Z')
+                
+                echo "--- ESTADO DE CARGA Y PROCESOS -------------------------------------"
+                echo " Load Average: $load_avg"
+                echo " Total Procs : $total_procs procesos"
+                if [[ "$zombie_procs" -gt 0 ]]; then
+                    echo " Zombies     : ¡ALERTA! $zombie_procs procesos Z"
+                else
+                    echo " Zombies     : 0 (Saludable)"
+                fi
+                echo ""
+                echo " TOP 5 RAM:"
+                ps aux --sort=-%mem | grep -v "ps aux" | awk 'NR>=1 && NR<=5 {printf "  %-15.15s %-6s %-25.25s\n", $1, $4"%", $11}'
+                echo ""
+                echo " TOP 5 CPU:"
+                ps aux --sort=-%cpu | grep -v "ps aux" | awk 'NR>=1 && NR<=5 {printf "  %-15.15s %-6s %-25.25s\n", $1, $3"%", $11}'
+                echo ""
+
+                log_action "Panorama general del servidor generado"
+                pause_screen
+                ;;
+            2)
                 while true; do
                     clear
                     echo "=========================================================="
@@ -188,8 +284,8 @@ menu() {
                     echo ""
                     echo "--- RECURSOS, DISCOS Y RED NATIVA ---"
                     echo " 8) Recursos locales y procesos en vivo (top, ps CPU/RAM, free)"
-                    echo " 9) Almacenamiento y particiones (df -h)"
-                    echo "10) Red básica e interfaces (ip a, ip route, ss ports, ping)"
+                    echo " 9) Almacenamiento y particiones (df -h formateado)"
+                    echo "10) Red básica e interfaces (resumen de interfaces y rutas)"
                     echo ""
                     echo " q) Volver al menú principal"
                     echo "=========================================================="
@@ -244,7 +340,6 @@ menu() {
                             prompt_input "Ruta del archivo a analizar: " info_file
                             
                             if [[ -f "$info_file" ]]; then
-                                # --- BLOQUE 1: Identidad y Permisos ---
                                 local file_out=$(file -b "$info_file")
                                 local f_size=$(stat -c "%s" "$info_file")
                                 local f_perm=$(stat -c "%A (%a)" "$info_file")
@@ -260,7 +355,6 @@ menu() {
                                 printf "│ Propietario: %-36s │\n" "$f_owner"
                                 echo "└──────────────────────────────────────────────────┘"
 
-                                # --- BLOQUE 2: Fechas de Estado (stat) ---
                                 echo ""
                                 echo "┌──────────────────────────────────────────────────┐"
                                 echo "│ FECHAS DE ESTADO                                 │"
@@ -279,7 +373,6 @@ menu() {
                                 fi
                                 echo "└──────────────────────────────────────────────────┘"
 
-                                # --- BLOQUE 3: Métricas de Contenido (WC + Análisis) ---
                                 echo ""
                                 local wc_data=($(wc -l -w -c -m "$info_file"))
                                 local wc_lines=${wc_data[1]}
@@ -423,20 +516,37 @@ menu() {
                             ;;
                         9)
                             echo ""
-                            echo "[-] Almacenamiento en disco (df -h):"
-                            df -h -x tmpfs -x devtmpfs
+                            echo "╔══════════════════════════════════════════════════╗"
+                            echo "║           ALMACENAMIENTO Y PARTICIONES           ║"
+                            echo "╚══════════════════════════════════════════════════╝"
+                            echo ""
+                            echo "┌──────────────────────┬──────────┬──────────┬──────────┬────────┐"
+                            echo "│ PUNTO DE MONTAJE     │ TAMAÑO   │ USADO    │ DISP     │ USO %  │"
+                            echo "├──────────────────────┼──────────┼──────────┼──────────┼────────┤"
+                            df -h -x tmpfs -x devtmpfs -x squashfs | awk 'NR>1 {
+                                printf "│ %-20.20s │ %-8s │ %-8s │ %-8s │ %-6s │\n", $6, $2, $3, $4, $5
+                            }'
+                            echo "└──────────────────────┴──────────┴──────────┴──────────┴────────┘"
+                            log_action "Nativo: Consulta de almacenamiento df -h formateado"
                             pause_screen
                             ;;
                         10)
                             echo ""
-                            echo "=========================================="
-                            echo "           RED Y CONECTIVIDAD BÁSICA"
-                            echo "=========================================="
-                            echo " 1) Direcciones IP e interfaces (ip a)"
-                            echo " 2) Tabla de ruteo (ip route)"
+                            echo "╔══════════════════════════════════════════════════╗"
+                            echo "║             RED BÁSICA E INTERFACES              ║"
+                            echo "╚══════════════════════════════════════════════════╝"
+                            echo ""
+                            echo "[-] Interfaces de red detectadas:"
+                            ip -brief address | awk '{print "  > " $1 " (" $2 ")"}'
+                            echo "------------------------------------------"
+                            
+                            echo " 1) Ver direcciones IP detalladas (ip a)"
+                            echo " 2) Ver tabla de ruteo (ip route)"
                             echo " 3) Puertos locales en escucha (ss -tulpn)"
                             echo " 4) Prueba rápida de conectividad (ping)"
-                            prompt_input "Selecciona opción [1-4]: " net_choice
+                            echo " 5) Ficha técnica de una interfaz específica"
+                            prompt_input "Selecciona opción [1-5]: " net_choice
+                            
                             case $net_choice in
                                 1) ip -brief address ;;
                                 2) ip route ;;
@@ -445,14 +555,37 @@ menu() {
                                     prompt_input "Ingresa IP o host de prueba: " p_target
                                     [[ -n "$p_target" ]] && ping -c 4 "$p_target"
                                     ;;
+                                5)
+                                    prompt_input "Ingresa el nombre de la interfaz (ej: eth0, wlan0): " iface
+                                    if [[ -n "$iface" ]]; then
+                                        local state=$(ip link show "$iface" 2>/dev/null | grep -oP 'state \K\w+')
+                                        local mac=$(ip link show "$iface" 2>/dev/null | awk '/link\/ether/ {print $2}')
+                                        local ipv4=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+                                        local ipv6=$(ip -6 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet6\s)[\da-f:]+' | head -n 1)
+                                        local gw=$(ip route show default dev "$iface" 2>/dev/null | awk '{print $3}')
+                                        
+                                        echo ""
+                                        echo "┌──────────────────────────────────────────────────┐"
+                                        echo "│ FICHA TÉCNICA DE INTERFAZ                        │"
+                                        echo "├──────────────────────────────────────────────────┤"
+                                        printf "│ Interfaz   : %-36s │\n" "$iface"
+                                        printf "│ Estado     : %-36s │\n" "${state:-Desconocido}"
+                                        printf "│ MAC Address: %-36s │\n" "${mac:-N/A}"
+                                        printf "│ IPv4       : %-36s │\n" "${ipv4:-N/A}"
+                                        printf "│ IPv6       : %-36.36s │\n" "${ipv6:-N/A}"
+                                        printf "│ Gateway    : %-36s │\n" "${gw:-N/A}"
+                                        echo "└──────────────────────────────────────────────────┘"
+                                    fi
+                                    ;;
                             esac
+                            log_action "Nativo: Consulta de red básica ejecutada."
                             pause_screen
                             ;;
                         q|[qQ]) break ;;
                     esac
                 done
                 ;;
-            2)
+            3)
                 while true; do
                     clear
                     echo "=========================================="
@@ -471,7 +604,7 @@ menu() {
                     esac
                 done
                 ;;
-            3)
+            4)
                 while true; do
                     clear
                     echo "=========================================="
@@ -528,7 +661,7 @@ menu() {
                     esac
                 done
                 ;;
-            4)
+            5)
                 while true; do
                     clear
                     echo "=========================================="
@@ -547,7 +680,7 @@ menu() {
                                 eval "$PKG_UPDATE"
                                 case "$PKG_MGR" in
                                     apt) sudo apt dist-upgrade -y ;;
-                                    dnf) sudo dnf upgrade -y --skip-broken ;;
+                                    dnf) sudo dnf upgrade -y --nobest --skip-broken ;;
                                     pacman) sudo pacman -Su --noconfirm ;;
                                     zypper) sudo zypper update -y ;;
                                     apk) sudo apk upgrade ;;
@@ -582,7 +715,7 @@ menu() {
                     esac
                 done
                 ;;
-            5)
+            6)
                 while true; do
                     clear
                     echo "=========================================="
@@ -750,7 +883,7 @@ menu() {
                     esac
                 done
                 ;;
-            6)
+            7)
                 while true; do
                     clear
                     echo "=========================================="
@@ -769,7 +902,7 @@ menu() {
                     esac
                 done
                 ;;
-            7)
+            8)
                 while true; do
                     clear
                     echo "=========================================="
@@ -954,7 +1087,6 @@ menu() {
                                 [[ "$check_url" != http* ]] && check_url="https://$check_url"
                                 echo "[-] Verificando estado HTTP..."
                                 
-                                # Realizamos la petición y capturamos los tiempos
                                 local metrics=$(curl -s -o /dev/null -L -w \
                                     "%{http_code}|%{time_namelookup}|%{time_connect}|%{time_appconnect}|%{time_starttransfer}|%{time_total}" \
                                     --max-time 10 "$check_url")
@@ -1012,7 +1144,7 @@ menu() {
                     esac
                 done
                 ;;
-            8)
+            9)
                 while true; do
                     clear
                     echo "=========================================="
@@ -1065,7 +1197,7 @@ menu() {
                             prompt_input "Ingresa la IP o hostname objetivo: " target_ip
                             if [[ -n "$target_ip" ]]; then
                                 echo "[-] Ejecutando escaneo agresivo (-A) en '$target_ip'..."
-                                sudo nmap -A -T4 "$target_ip"
+                                sudo nmap -A -T4 "$target_ip":wq
                                 log_action "Nmap: Escaneo agresivo en $target_ip"
                             fi
                             pause_screen
@@ -1084,7 +1216,7 @@ menu() {
                     esac
                 done
                 ;;
-            9|[qQ])
+            q|[qQ])
                 echo "¡Hasta luego, Leonardo! Cerrando dashboard."
                 break
                 ;;
