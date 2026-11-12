@@ -11,20 +11,16 @@
 #    * Evolución del script: Health Check, autoinstalación de paquetes, 
 #      formatos de tabla, fichas técnicas de red, arreglos de DNF, etc.
 #
-#  [2026-11-11] - v4.0 (Rama DS)
-#    * Rediseño total del Health Check (Opción 1): formato lista sin bordes.
+#  [2026-11-11] - v4.0 a v4.6 (Rama DS)
+#    * Rediseño Health Check, menú Git, Cron/Logs, BBDD y ajustes de sqlcmd.
 #
-#  [2026-11-11] - v4.1 (Rama DS)
-#    * Robustecimiento del menú Git (Sección 5).
+#  [2026-11-12] - v4.7 (Rama DS)
+#    * Seguridad: Añadida función prompt_password() para ocultar la contraseña.
 #
-#  [2026-11-11] - v4.2 (Rama DS)
-#    * Nueva Opción 8 en el menú principal: "Tareas Programadas y Logs".
-#
-#  [2026-11-11] - v4.3 (Rama DS)
-#    * Rediseño de la búsqueda de logs (Opciones 5 y 6 de la Sección 8):
-#      - Ahora escanea /var/log y subcarpetas buscando archivos de texto.
-#      - Muestra una lista numerada interactiva para evitar escribir rutas a mano.
-#      - Filtra archivos binarios (btmp, wtmp) y comprimidos.
+#  [2026-11-12] - v4.8 (Rama DS)
+#    * Validación de errores de conexión a BBDD:
+#      - Si la contraseña es incorrecta o el servicio está caído, ahora
+#        muestra un mensaje explícito en pantalla en lugar de quedar en blanco.
 # ==============================================================================
 
 # --- Rutas y variables globales -----------------------------------------------
@@ -89,6 +85,22 @@ prompt_input() {
     stty "$old_stty_local" 2>/dev/null
 }
 
+prompt_password() {
+    local prompt_msg="$1"
+    local var_name="$2"
+    
+    local old_stty_local=$(stty -g 2>/dev/null)
+    
+    # Apagar el eco de la terminal
+    stty -echo 2>/dev/null
+    echo -n "$prompt_msg"
+    read -r "$var_name"
+    
+    # Restaurar el eco y hacer un salto de línea
+    stty "$old_stty_local" 2>/dev/null
+    echo ""
+}
+
 ccurl() {
     curl -s --max-time 10 "$@"
 }
@@ -126,8 +138,28 @@ ensure_pkg() {
     fi
 }
 
+# --- need() mejorada para sqlcmd ----------------------------------------------
 need() {
-    ensure_pkg "$1" "${2:-$1}"
+    local bin="$1"
+    local pkg="${2:-$1}"
+    
+    if command -v "$bin" &>/dev/null; then
+        return 0
+    fi
+    
+    if [[ "$bin" == "sqlcmd" ]]; then
+        if [[ -x "/opt/mssql-tools18/bin/sqlcmd" ]]; then
+            export PATH="$PATH:/opt/mssql-tools18/bin"
+            echo "[-] Encontrado sqlcmd en /opt/mssql-tools18/bin. Añadido al PATH de esta sesión."
+            return 0
+        elif [[ -x "/opt/mssql-tools/bin/sqlcmd" ]]; then
+            export PATH="$PATH:/opt/mssql-tools/bin"
+            echo "[-] Encontrado sqlcmd en /opt/mssql-tools/bin. Añadido al PATH de esta sesión."
+            return 0
+        fi
+    fi
+    
+    ensure_pkg "$bin" "$pkg"
 }
 
 # --- Menú principal -----------------------------------------------------------
@@ -153,13 +185,14 @@ menu() {
         echo " 6) Utilidades Locales y Consultas (Clima, QR, Credenciales)"
         echo " 7) Herramientas de Automatización (Ansible, Terraform)"
         echo " 8) Tareas Programadas (Cron) y Logs del Sistema"
-        echo " 9) Auditoría de Red y Seguridad (Nmap)"
-        echo "10) Diagnóstico y Pruebas de Red Avanzadas"
+        echo " 9) Gestión de Bases de Datos (BBDD)"
+        echo "10) Auditoría de Red y Seguridad (Nmap)"
+        echo "11) Diagnóstico y Pruebas de Red Avanzadas"
         echo ""
         echo " q) Salir (o presiona 'q')"
         echo "=========================================================="
 
-        prompt_input "LEO-DASHBOARD > Elige una opción [1-10 o q]: " opt
+        prompt_input "LEO-DASHBOARD > Elige una opción [1-11 o q]: " opt
 
         case $opt in
             1)
@@ -228,11 +261,12 @@ menu() {
 
                 echo "--- SERVICIOS CRÍTICOS (Activos) -----------------------------------"
                 local critical_services=(
-                    "ssh" "sshd" "docker" "cron" "crond" 
+                    "ssh" "sshd" "docker" "containerd" "cron" "crond" 
                     "systemd-resolved" "firewalld" "ufw" 
                     "NetworkManager" "network" "chronyd" "ntp" 
                     "auditd" "rsyslog" "nginx" "apache2" "httpd" 
-                    "mariadb" "mysql" "postgresql"
+                    "mariadb" "mysql" "postgresql" "mssql-server" 
+                    "mongod" "redis" "redis-server"
                 )
                 local active_found=0
                 for svc in "${critical_services[@]}"; do
@@ -243,6 +277,59 @@ menu() {
                 done
                 if [[ $active_found -eq 0 ]]; then
                     echo " No se detectaron servicios críticos corriendo."
+                fi
+                echo ""
+
+                # --- NUEVO APARTADO: BASES DE DATOS ---
+                echo "--- BASES DE DATOS DETECTADAS --------------------------------------"
+                local db_found=0
+                
+                # SQL Server (detecta binario o proceso)
+                if command -v sqlcmd &>/dev/null || [[ -x "/opt/mssql-tools/bin/sqlcmd" ]] || [[ -x "/opt/mssql-tools18/bin/sqlcmd" ]] || pgrep -x "sqlservr" &>/dev/null; then
+                    local mssql_ver="Desconocida"
+                    if command -v sqlcmd &>/dev/null; then
+                        mssql_ver=$(sqlcmd -S localhost -Q "SELECT @@VERSION" -h -1 2>/dev/null | head -n1 | cut -c1-50)
+                    elif [[ -x "/opt/mssql-tools/bin/sqlcmd" ]]; then
+                        mssql_ver=$(/opt/mssql-tools/bin/sqlcmd -S localhost -Q "SELECT @@VERSION" -h -1 2>/dev/null | head -n1 | cut -c1-50)
+                    elif command -v dpkg &>/dev/null; then
+                        mssql_ver=$(dpkg -l | grep mssql-server | awk '{print $3}' | head -n1)
+                    fi
+                    echo " [ OK ] Microsoft SQL Server detectado (Versión: ${mssql_ver:-N/A})"
+                    db_found=1
+                fi
+                
+                # MySQL / MariaDB
+                if command -v mysql &>/dev/null || pgrep -x "mysqld" &>/dev/null; then
+                    local mysql_ver=$(mysql --version 2>/dev/null | awk '{print $3}' | tr -d ',')
+                    echo " [ OK ] MySQL/MariaDB detectado (Cliente: ${mysql_ver:-N/A})"
+                    db_found=1
+                fi
+                
+                # PostgreSQL
+                if command -v psql &>/dev/null || pgrep -x "postgres" &>/dev/null; then
+                    local pg_ver=$(psql --version 2>/dev/null | awk '{print $3}')
+                    echo " [ OK ] PostgreSQL detectado (Cliente: ${pg_ver:-N/A})"
+                    db_found=1
+                fi
+                
+                # MongoDB
+                if command -v mongod &>/dev/null || pgrep -x "mongod" &>/dev/null; then
+                    local mongo_ver=$(mongod --version 2>/dev/null | head -n1 | awk '{print $3}' | tr -d 'v,')
+                    echo " [ OK ] MongoDB detectado (Versión: ${mongo_ver:-N/A})"
+                    db_found=1
+                fi
+                
+                # Redis
+                if command -v redis-server &>/dev/null || pgrep -x "redis-server" &>/dev/null; then
+                    local redis_ver=$(redis-server --version 2>/dev/null | awk '{print $3}' | tr -d 'v=,')
+                    echo " [ OK ] Redis detectado (Versión: ${redis_ver:-N/A})"
+                    db_found=1
+                fi
+                
+                if [[ $db_found -eq 0 ]]; then
+                    echo " (No se detectaron motores de base de datos en el PATH o procesos activos)"
+                else
+                    echo " (Usa la opción 9 del menú para conectar y listar BBDD/esquemas)"
                 fi
                 echo ""
 
@@ -982,7 +1069,7 @@ menu() {
                     echo ""
                     echo " 4) Listar carpetas y archivos de logs comunes (por tamaño)"
                     echo " 5) Ver un log en tiempo real (tail -f) [Interactivo]"
-                    echo " 6) Buscar errores recientes en un log [Interactivo]"
+                    echo " 6) Buscar y filtrar logs (Avanzado) [Interactivo]"
                     echo ""
                     echo " q) Volver al menú principal"
                     echo "=========================================================="
@@ -1068,37 +1155,95 @@ menu() {
                             ;;
                         6)
                             echo ""
-                            echo "[-] Buscando archivos de log de texto comunes..."
-                            local logs_found=($(find /var/log -maxdepth 2 -type f ! -name "*.gz" ! -name "*.xz" ! -name "*.zip" ! -name "btmp*" ! -name "wtmp*" ! -name "lastlog" 2>/dev/null | sort))
-                            
-                            if [[ ${#logs_found[@]} -eq 0 ]]; then
-                                echo "[!] No se encontraron archivos de log de texto."
+                            echo "[?] ¿Cómo deseas seleccionar el archivo de log?"
+                            echo " 1) Elegir desde la lista de logs disponibles (rápido)"
+                            echo " 2) Escribir la ruta manualmente (personalizado)"
+                            prompt_input "Selecciona una opción [1-2]: " select_method
+
+                            local target_log=""
+                            if [[ "$select_method" == "1" ]]; then
+                                echo ""
+                                echo "[-] Buscando archivos de log de texto comunes..."
+                                local logs_found=($(find /var/log -maxdepth 2 -type f ! -name "*.gz" ! -name "*.xz" ! -name "*.zip" ! -name "btmp*" ! -name "wtmp*" ! -name "lastlog" 2>/dev/null | sort))
+                                
+                                if [[ ${#logs_found[@]} -eq 0 ]]; then
+                                    echo "[!] No se encontraron archivos de log de texto."
+                                    pause_screen
+                                    continue
+                                fi
+
+                                echo ""
+                                local i=1
+                                for logfile in "${logs_found[@]}"; do
+                                    printf " %2d) %s\n" "$i" "$logfile"
+                                    ((i++))
+                                done
+                                
+                                echo ""
+                                prompt_input "Selecciona el número del log a analizar (o 'q' para cancelar): " log_num
+                                if [[ "$log_num" == "q" || -z "$log_num" ]]; then continue; fi
+                                
+                                if [[ "$log_num" =~ ^[0-9]+$ ]] && (( log_num >= 1 && log_num <= ${#logs_found[@]} )); then
+                                    target_log="${logs_found[$log_num]}"
+                                else
+                                    echo "[ERROR] Selección no válida."
+                                    pause_screen
+                                    continue
+                                fi
+
+                            elif [[ "$select_method" == "2" ]]; then
+                                echo ""
+                                prompt_input "Ingresa la ruta completa del log (ej: /var/log/syslog o /var/log/nginx/error.log): " target_log
+                                if [[ ! -f "$target_log" ]]; then
+                                    echo ""
+                                    echo "[!] ERROR: La ruta '$target_log' no es válida o el archivo no existe."
+                                    pause_screen
+                                    continue
+                                fi
+                            else
+                                echo "[!] Opción no válida."
                                 pause_screen
                                 continue
                             fi
 
                             echo ""
-                            local i=1
-                            for logfile in "${logs_found[@]}"; do
-                                printf " %2d) %s\n" "$i" "$logfile"
-                                ((i++))
-                            done
-                            
+                            prompt_input "Ingresa el patrón a buscar [Default: error|fail|crit|warn]: " search_pattern
+                            search_pattern="${search_pattern:-error|fail|crit|warn}"
+
                             echo ""
-                            prompt_input "Selecciona el número del log a analizar (o 'q' para cancelar): " log_num
-                            if [[ "$log_num" == "q" || -z "$log_num" ]]; then
-                                continue
-                            fi
+                            echo "[-] Buscando '$search_pattern' en las últimas 500 líneas de '$target_log'..."
                             
-                            if [[ "$log_num" =~ ^[0-9]+$ ]] && (( log_num >= 1 && log_num <= ${#logs_found[@]} )); then
-                                local target_log="${logs_found[$log_num]}"
-                                echo ""
-                                echo "[-] Buscando errores/fallos en las últimas 100 líneas de '$target_log':"
-                                echo "--------------------------------------------------------"
-                                sudo tail -n 100 "$target_log" | grep -iE "error|fail|crit|warn|severe|denied|refused" || echo "No se encontraron patrones de error recientes."
-                                log_action "Logs: Filtro de errores en $target_log"
+                            # Capturamos el resultado en una variable
+                            local search_results=$(sudo tail -n 500 "$target_log" | grep -iE "$search_pattern")
+
+                            if [[ -z "$search_results" ]]; then
+                                echo "[-] No se encontraron coincidencias con '$search_pattern' en las últimas 500 líneas."
                             else
-                                echo "[ERROR] Selección no válida."
+                                local result_count=$(echo "$search_results" | wc -l)
+                                echo "[-] Se encontraron $result_count coincidencias."
+                                echo ""
+                                echo "[?] ¿Qué deseas hacer con el resultado?"
+                                echo " 1) Guardar en archivo /tmp/"
+                                echo " 2) Ver en pantalla (usando paginador 'less')"
+                                prompt_input "Selecciona una opción [1-2]: " output_action
+                                
+                                if [[ "$output_action" == "1" ]]; then
+                                    local out_file="/tmp/filtro_$(basename "$target_log")_$(date +%Y%m%d_%H%M%S).log"
+                                    echo "$search_results" | sudo tee "$out_file" > /dev/null
+                                    echo ""
+                                    echo "[OK] Resultado guardado exitosamente en: $out_file"
+                                    log_action "Logs: Filtro guardado en $out_file"
+                                elif [[ "$output_action" == "2" ]]; then
+                                    echo ""
+                                    echo "[-] Abriendo visor (presiona 'q' para salir del visor)..."
+                                    sleep 1
+                                    echo "$search_results" | less
+                                    log_action "Logs: Filtro visto en pantalla de $target_log"
+                                else
+                                    echo "[!] Opción no válida, mostrando en pantalla por defecto..."
+                                    sleep 1
+                                    echo "$search_results" | less
+                                fi
                             fi
                             pause_screen
                             ;;
@@ -1107,6 +1252,125 @@ menu() {
                 done
                 ;;
             9)
+                while true; do
+                    clear
+                    echo "===================================================================="
+                    echo "                 GESTIÓN DE BASES DE DATOS (BBDD)                   "
+                    echo "===================================================================="
+                    echo " 1) Detectar motores instalados (rápido)"
+                    echo " 2) Conectar a SQL Server (mssql) y listar BBDD"
+                    echo " 3) Conectar a MySQL/MariaDB y listar BBDD"
+                    echo " 4) Conectar a PostgreSQL y listar BBDD"
+                    echo ""
+                    echo " q) Volver al menú principal"
+                    echo "=========================================================="
+                    prompt_input "Elige una opción [1-4 o q]: " db_opt
+
+                    case $db_opt in
+                        1)
+                            echo ""
+                            echo "[-] Buscando motores de base de datos instalados..."
+                            if command -v sqlcmd &>/dev/null || [[ -x "/opt/mssql-tools/bin/sqlcmd" ]] || pgrep -x "sqlservr" &>/dev/null; then echo "  > SQL Server (mssql) detectado."; fi
+                            if command -v mysql &>/dev/null || pgrep -x "mysqld" &>/dev/null; then echo "  > MySQL/MariaDB detectado."; fi
+                            if command -v psql &>/dev/null || pgrep -x "postgres" &>/dev/null; then echo "  > PostgreSQL detectado."; fi
+                            if command -v mongod &>/dev/null || pgrep -x "mongod" &>/dev/null; then echo "  > MongoDB detectado."; fi
+                            if command -v redis-server &>/dev/null || pgrep -x "redis-server" &>/dev/null; then echo "  > Redis detectado."; fi
+                            pause_screen
+                            ;;
+                        2)
+                            echo ""
+                            if ! need sqlcmd mssql-tools; then
+                                pause_screen
+                                continue
+                            fi
+                            echo "[-] Intentando conectar a SQL Server local..."
+                            prompt_input "Usuario [Default: sa]: " db_user
+                            db_user="${db_user:-sa}"
+                            prompt_password "Contraseña: " db_pass
+                            
+                            echo ""
+                            echo "[-] Consultando versión y bases de datos..."
+                            
+                            # Validación de conexión SQL Server
+                            local mssql_check=$(sqlcmd -S localhost -U "$db_user" -P "$db_pass" -Q "SELECT 1" -h -1 2>&1)
+                            if [[ $? -ne 0 ]]; then
+                                echo "[ERROR] No se pudo conectar a SQL Server."
+                                echo "        Verifica tus credenciales o si el servicio (mssql-server) está activo."
+                                log_action "BBDD: Fallo de conexión SQL Server"
+                            else
+                                echo "--- VERSIÓN ---"
+                                sqlcmd -S localhost -U "$db_user" -P "$db_pass" -Q "SELECT @@VERSION" -h -1 -W 2>/dev/null | head -n1
+                                echo ""
+                                echo "--- BASES DE DATOS ---"
+                                sqlcmd -S localhost -U "$db_user" -P "$db_pass" -Q "SELECT name FROM sys.databases;" -h -1 -W 2>/dev/null
+                                log_action "BBDD: Consulta SQL Server"
+                            fi
+                            pause_screen
+                            ;;
+                        3)
+                            echo ""
+                            if ! need mysql mysql-client; then
+                                pause_screen
+                                continue
+                            fi
+                            echo "[-] Intentando conectar a MySQL/MariaDB local..."
+                            prompt_input "Usuario [Default: root]: " db_user
+                            db_user="${db_user:-root}"
+                            prompt_password "Contraseña: " db_pass
+                            
+                            echo ""
+                            echo "[-] Consultando versión y bases de datos..."
+                            
+                            # Validación de conexión MySQL
+                            if ! mysql -u "$db_user" -p"$db_pass" -e "SELECT 1;" &>/dev/null; then
+                                echo "[ERROR] No se pudo conectar a MySQL/MariaDB."
+                                echo "        Verifica tus credenciales o si el servicio (mysqld/mariadb) está activo."
+                                log_action "BBDD: Fallo de conexión MySQL/MariaDB"
+                            else
+                                echo "--- VERSIÓN ---"
+                                mysql -u "$db_user" -p"$db_pass" -e "SELECT VERSION();" 2>/dev/null
+                                echo ""
+                                echo "--- BASES DE DATOS ---"
+                                mysql -u "$db_user" -p"$db_pass" -e "SHOW DATABASES;" 2>/dev/null
+                                log_action "BBDD: Consulta MySQL/MariaDB"
+                            fi
+                            pause_screen
+                            ;;
+                        4)
+                            echo ""
+                            if ! need psql postgresql-client; then
+                                pause_screen
+                                continue
+                            fi
+                            echo "[-] Intentando conectar a PostgreSQL local..."
+                            prompt_input "Usuario [Default: postgres]: " db_user
+                            db_user="${db_user:-postgres}"
+                            prompt_input "Base de datos [Default: postgres]: " db_name
+                            db_name="${db_name:-postgres}"
+                            
+                            echo ""
+                            echo "[-] Consultando versión y bases de datos..."
+                            
+                            # Validación de conexión PostgreSQL
+                            if ! sudo -u "$db_user" psql -d "$db_name" -c "SELECT 1;" &>/dev/null; then
+                                echo "[ERROR] No se pudo conectar a PostgreSQL."
+                                echo "        Verifica el nombre de la base de datos o si el servicio (postgresql) está activo."
+                                log_action "BBDD: Fallo de conexión PostgreSQL"
+                            else
+                                echo "--- VERSIÓN ---"
+                                sudo -u "$db_user" psql -d "$db_name" -c "SELECT version();" -t 2>/dev/null
+                                echo ""
+                                echo "--- BASES DE DATOS ---"
+                                sudo -u "$db_user" psql -d "$db_name" -c "\l" 2>/dev/null
+                                log_action "BBDD: Consulta PostgreSQL"
+                            fi
+                            pause_screen
+                            ;;
+                        q|[qQ]) break ;;
+                    esac
+                done
+                ;;
+            10)
                 while true; do
                     clear
                     echo "=========================================="
@@ -1178,7 +1442,7 @@ menu() {
                     esac
                 done
                 ;;
-            10)
+            11)
                 while true; do
                     clear
                     echo "=========================================="
