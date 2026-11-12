@@ -24,7 +24,7 @@
 #    * Módulo de Automatización (IaC) reescrito:
 #      - Submenú exclusivo para Ansible (inventarios, ping, playbooks).
 #      - Submenú exclusivo para Terraform (init, plan, fmt, directorios).
-#      - Búsqueda dinámica de archivos .yml y .tf.
+#      - Búsqueda dinámica de archivos .yml y .tf en rutas típicas.
 # ==============================================================================
 
 # --- Opciones de zsh ----------------------------------------------------------
@@ -963,8 +963,11 @@ git_log() {
 
 git_pull() {
     git_ok || return 0
-    msg_info "Descargando cambios (git pull --ff-only)..."
-    git -C "$REPO_DIR" pull --ff-only
+    msg_info "Descargando cambios..."
+    if ! git -C "$REPO_DIR" pull --ff-only 2>/dev/null; then
+        msg_warn "Las ramas han divergido. Intentando merge automático..."
+        git -C "$REPO_DIR" pull --no-rebase
+    fi
     log_action "Git: pull"
 }
 
@@ -1166,16 +1169,37 @@ menu_utils() {
 }
 
 # ==============================================================================
-#  AUTOMATIZACIÓN (IaC) - NUEVO MÓDULO DSV1
+#  AUTOMATIZACIÓN (IaC) - dsv1.1
 # ==============================================================================
 
-# --- Funciones base para buscar archivos ---
+# Busca un directorio de trabajo lógico para Ansible/Terraform
+find_workdir() {
+    local type="$1" # "ansible" o "terraform"
+    local default_dir=""
+    
+    if [[ "$type" == "ansible" ]]; then
+        for d in "$HOME/ansible" "$HOME/playbooks" "/etc/ansible" "$HOME/proyectos/ansible" "$HOME/repos/ansible"; do
+            if [[ -d "$d" ]]; then default_dir="$d"; break; fi
+        done
+    else
+        for d in "$HOME/terraform" "$HOME/infra" "$HOME/proyectos/terraform" "$HOME/repos/terraform"; do
+            if [[ -d "$d" ]]; then default_dir="$d"; break; fi
+        done
+    fi
+    
+    [[ -z "$default_dir" ]] && default_dir="$PWD"
+    
+    local workdir
+    prompt_input "Directorio donde buscar [Default: $default_dir]: " workdir
+    print -r -- "${workdir:-$default_dir}"
+}
+
 find_files() {
     local dir="$1" pattern="$2"
     [[ -z "$dir" ]] && dir="."
-    # Busca hasta 3 niveles de profundidad, excluyendo carpetas comunes
-    find "$dir" -maxdepth 3 -type f -name "$pattern" \
-        -not -path '*/\.*' -not -path '*/node_modules/*' 2>/dev/null | sort
+    find "$dir" -maxdepth 4 -type f -name "$pattern" \
+        -not -path '*/\.*' -not -path '*/node_modules/*' \
+        -not -path '*/venv/*' -not -path '*/__pycache__/*' 2>/dev/null | sort
 }
 
 # --- Submenú Ansible ---
@@ -1187,13 +1211,11 @@ ans_status() {
 }
 
 ans_inventories() {
-    local workdir
-    prompt_input "Directorio donde buscar inventarios [Default: actual]: " workdir
-    workdir="${workdir:-.}"
-    if [[ ! -d "$workdir" ]]; then msg_err "El directorio no existe."; return 0; fi
+    local workdir; workdir=$(find_workdir ansible)
+    if [[ ! -d "$workdir" ]]; then msg_err "El directorio '$workdir' no existe."; return 0; fi
     
     msg_info "Buscando inventarios en '$workdir'..."
-    local -a invs=(${(f)"$(find_files "$workdir" '*inventory*' ; find_files "$workdir" 'hosts')"})
+    local -a invs=(${(f)"$(find_files "$workdir" 'hosts' ; find_files "$workdir" '*inventory*')"})
     
     if (( ${#invs} == 0 )); then
         msg_warn "No se encontraron archivos de inventario (hosts, inventory*)."
@@ -1207,15 +1229,14 @@ ans_inventories() {
 
 ans_ping() {
     need ansible || return 0
-    local workdir inv
-    prompt_input "Directorio del inventario [Default: actual]: " workdir
-    workdir="${workdir:-.}"
+    local workdir; workdir=$(find_workdir ansible)
     
-    local -a invs=(${(f)"$(find_files "$workdir" '*inventory*' ; find_files "$workdir" 'hosts')"})
-    if (( ${#invs} == 0 )); then msg_err "No se encontraron inventarios."; return 0; fi
+    local -a invs=(${(f)"$(find_files "$workdir" 'hosts' ; find_files "$workdir" '*inventory*')"})
+    if (( ${#invs} == 0 )); then msg_err "No se encontraron inventarios en '$workdir'."; return 0; fi
     
     local i=1 f
     for f in "${invs[@]}"; do print " $i) $f"; i=$((i+1)); done
+    local inv
     prompt_input "Selecciona el número del inventario [Default: 1]: " inv
     inv="${inv:-1}"
     
@@ -1231,20 +1252,21 @@ ans_ping() {
 
 ans_playbooks() {
     need ansible || return 0
-    local workdir
-    prompt_input "Directorio donde buscar playbooks (.yml) [Default: actual]: " workdir
-    workdir="${workdir:-.}"
+    local workdir; workdir=$(find_workdir ansible)
     
+    msg_info "Buscando playbooks (.yml) en '$workdir'..."
     local -a plays=(${(f)"$(find_files "$workdir" '*.yml')"})
     if (( ${#plays} == 0 )); then
         msg_warn "No se encontraron archivos .yml en '$workdir'."
+        msg_info "Sugerencia: crea un directorio como ~/ansible o ~/playbooks y coloca tus archivos ahí."
         return 0
     fi
     
     local i=1 f
     for f in "${plays[@]}"; do print " $i) $f"; i=$((i+1)); done
-    prompt_input "Selecciona el número del playbook a ejecutar: " play
-    [[ -z "$play" ]] && return 0
+    local play
+    prompt_input "Selecciona el número del playbook a ejecutar (o 'q' para cancelar): " play
+    [[ -z "$play" || "$play" == "q" ]] && return 0
     
     if [[ "$play" == <-> ]] && (( play >= 1 && play <= ${#plays} )); then
         local target="${plays[$play]}"
@@ -1282,16 +1304,15 @@ tf_status() {
 }
 
 tf_dirs() {
-    local workdir
-    prompt_input "Directorio donde buscar proyectos .tf [Default: actual]: " workdir
-    workdir="${workdir:-.}"
-    if [[ ! -d "$workdir" ]]; then msg_err "El directorio no existe."; return 0; fi
+    local workdir; workdir=$(find_workdir terraform)
+    if [[ ! -d "$workdir" ]]; then msg_err "El directorio '$workdir' no existe."; return 0; fi
     
     msg_info "Buscando directorios con archivos .tf en '$workdir'..."
     local -a dirs=(${(f)"$(find_files "$workdir" '*.tf' | xargs -n1 dirname 2>/dev/null | sort -u)"})
     
     if (( ${#dirs} == 0 )); then
-        msg_warn "No se encontraron proyectos Terraform (.tf)."
+        msg_warn "No se encontraron proyectos Terraform (.tf) en '$workdir'."
+        msg_info "Sugerencia: crea un directorio como ~/terraform o ~/infra y coloca tus archivos ahí."
         return 0
     fi
     
@@ -1302,15 +1323,14 @@ tf_dirs() {
 
 tf_plan() {
     need terraform || return 0
-    local workdir
-    prompt_input "Directorio del proyecto Terraform [Default: actual]: " workdir
-    workdir="${workdir:-.}"
+    local workdir; workdir=$(find_workdir terraform)
     
     local -a dirs=(${(f)"$(find_files "$workdir" '*.tf' | xargs -n1 dirname 2>/dev/null | sort -u)"})
-    if (( ${#dirs} == 0 )); then msg_err "No se encontraron proyectos Terraform."; return 0; fi
+    if (( ${#dirs} == 0 )); then msg_err "No se encontraron proyectos Terraform en '$workdir'."; return 0; fi
     
     local i=1 d
     for d in "${dirs[@]}"; do print " $i) $d"; i=$((i+1)); done
+    local proj
     prompt_input "Selecciona el número del proyecto [Default: 1]: " proj
     proj="${proj:-1}"
     
@@ -1326,10 +1346,7 @@ tf_plan() {
 
 tf_fmt() {
     need terraform || return 0
-    local workdir
-    prompt_input "Directorio para validar formato [Default: actual]: " workdir
-    workdir="${workdir:-.}"
-    
+    local workdir; workdir=$(find_workdir terraform)
     msg_info "Validando formato de archivos .tf en '$workdir' (check)..."
     ( cd "$workdir" && terraform fmt -check -recursive -diff )
     log_action "Terraform: fmt check en $workdir"
