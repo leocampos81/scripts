@@ -12,10 +12,19 @@
 #      formatos de tabla, fichas técnicas de red, arreglos de DNF, etc.
 #
 #  [2026-11-11] - v4.0 (Rama DS)
-#    * Rediseño total del Health Check (Opción 1):
-#      - Eliminados los cuadros de borde cerrado que se descuadraban.
-#      - Implementado formato de lista limpia con encabezados resaltados.
-#      - Alineación perfecta sin importar la longitud de los datos.
+#    * Rediseño total del Health Check (Opción 1): formato lista sin bordes.
+#
+#  [2026-11-11] - v4.1 (Rama DS)
+#    * Robustecimiento del menú Git (Sección 5).
+#
+#  [2026-11-11] - v4.2 (Rama DS)
+#    * Nueva Opción 8 en el menú principal: "Tareas Programadas y Logs".
+#
+#  [2026-11-11] - v4.3 (Rama DS)
+#    * Rediseño de la búsqueda de logs (Opciones 5 y 6 de la Sección 8):
+#      - Ahora escanea /var/log y subcarpetas buscando archivos de texto.
+#      - Muestra una lista numerada interactiva para evitar escribir rutas a mano.
+#      - Filtra archivos binarios (btmp, wtmp) y comprimidos.
 # ==============================================================================
 
 # --- Rutas y variables globales -----------------------------------------------
@@ -143,13 +152,14 @@ menu() {
         echo " 5) Mantenimiento de Sistema y Sincronización Git"
         echo " 6) Utilidades Locales y Consultas (Clima, QR, Credenciales)"
         echo " 7) Herramientas de Automatización (Ansible, Terraform)"
-        echo " 8) Diagnóstico y Pruebas de Red Avanzadas"
+        echo " 8) Tareas Programadas (Cron) y Logs del Sistema"
         echo " 9) Auditoría de Red y Seguridad (Nmap)"
+        echo "10) Diagnóstico y Pruebas de Red Avanzadas"
         echo ""
         echo " q) Salir (o presiona 'q')"
         echo "=========================================================="
 
-        prompt_input "LEO-DASHBOARD > Elige una opción [1-9 o q]: " opt
+        prompt_input "LEO-DASHBOARD > Elige una opción [1-10 o q]: " opt
 
         case $opt in
             1)
@@ -159,7 +169,6 @@ menu() {
                 echo "===================================================================="
                 echo ""
                 
-                # --- 1. SISTEMA Y HARDWARE ---
                 local os_name=$(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)
                 local kernel=$(uname -r | sed 's/\.x86_64//')
                 local arch=$(uname -m)
@@ -186,7 +195,6 @@ menu() {
                 fi
                 echo ""
 
-                # --- 2. ACTUALIZACIONES PENDIENTES ---
                 local updates_pending=0
                 if [[ "$PKG_MGR" == "apt" ]]; then
                     updates_pending=$(apt list --upgradable 2>/dev/null | grep -c "upgradable")
@@ -202,14 +210,12 @@ menu() {
                 fi
                 echo ""
 
-                # --- 3. ALMACENAMIENTO ---
                 echo "--- ALMACENAMIENTO -------------------------------------------------"
                 df -h -x tmpfs -x devtmpfs -x squashfs | awk 'NR>1 {
                     printf " %-22s %-10s %-10s %-10s %-6s\n", "Montaje: "$6, "Total: "$2, "Usado: "$3, "Disp: "$4, "Uso: "$5
                 }'
                 echo ""
 
-                # --- 4. RED ---
                 local primary_iface=$(ip route show default | awk '{print $5}' | head -n 1)
                 local primary_ip=$(ip -4 addr show "$primary_iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
                 local gateway=$(ip route show default | awk '{print $3}' | head -n 1)
@@ -220,7 +226,6 @@ menu() {
                 echo " Gateway     : ${gateway:-N/A}"
                 echo ""
 
-                # --- 5. SERVICIOS CRÍTICOS ---
                 echo "--- SERVICIOS CRÍTICOS (Activos) -----------------------------------"
                 local critical_services=(
                     "ssh" "sshd" "docker" "cron" "crond" 
@@ -241,7 +246,6 @@ menu() {
                 fi
                 echo ""
 
-                # --- 6. PROCESOS Y CARGA ---
                 local load_avg=$(cat /proc/loadavg | awk '{print $1 ", " $2 ", " $3}')
                 local total_procs=$(ps -e --no-headers | wc -l)
                 local zombie_procs=$(ps -eo stat --no-headers | grep -c '^Z')
@@ -668,12 +672,24 @@ menu() {
                     echo "   MANTENIMIENTO Y SINCRONIZACIÓN GIT"
                     echo "=========================================="
                     echo " 1) Actualizar paquetes de sistema (apt/dnf/pacman/zypper/apk)"
-                    echo " 2) Sincronizar repositorio de scripts (Git Pull/Push)"
+                    echo " 2) Ver estado del repositorio local (rama y cambios)"
+                    echo " 3) Ver últimos commits (historial reciente)"
+                    echo " 4) Descargar cambios del servidor (git pull)"
+                    echo " 5) Subir cambios locales (git add + commit + push)"
+                    echo " 6) Crear nueva rama de trabajo (git checkout -b)"
+                    echo " 7) Descartar cambios locales (git restore .) [PELIGRO]"
                     echo ""
                     echo " q) Volver al menú principal"
                     echo "=========================================="
-                    prompt_input "Elige una opción [1-2 o q]: " sub_opt
-                    case $sub_opt in
+                    prompt_input "Elige una opción [1-7 o q]: " git_opt
+
+                    if ! cd "$REPO_DIR" 2>/dev/null; then
+                        echo "[!] No se encontró el repositorio en $REPO_DIR"
+                        pause_screen
+                        continue
+                    fi
+
+                    case $git_opt in
                         1)
                             if [[ "$PKG_MGR" != "unknown" ]]; then
                                 echo "[-] Actualizando sistema con $PKG_MGR..."
@@ -692,22 +708,74 @@ menu() {
                             pause_screen
                             ;;
                         2)
-                            if ! cd "$REPO_DIR"; then
-                                echo "[!] No se encontró el repositorio en $REPO_DIR"
+                            echo ""
+                            local current_branch=$(git branch --show-current)
+                            echo "[-] Rama actual: $current_branch"
+                            echo ""
+                            echo "[-] Estado del repositorio (archivos modificados/nuevos):"
+                            if [[ -z $(git status -s) ]]; then
+                                echo "    (El árbol de trabajo está limpio, no hay cambios)"
+                            else
+                                git status -s
+                            fi
+                            log_action "Git: Status consultado"
+                            pause_screen
+                            ;;
+                        3)
+                            echo ""
+                            echo "[-] Últimos 5 commits:"
+                            git log --oneline -n 5
+                            log_action "Git: Log consultado"
+                            pause_screen
+                            ;;
+                        4)
+                            echo ""
+                            echo "[-] Descargando cambios (git pull)..."
+                            git pull
+                            log_action "Git: Pull ejecutado"
+                            pause_screen
+                            ;;
+                        5)
+                            echo ""
+                            if [[ -z $(git status -s) ]]; then
+                                echo "[!] No hay cambios para subir."
                                 pause_screen
                                 continue
                             fi
+                            
+                            echo "[-] Archivos modificados:"
                             git status -s
                             echo ""
-                            echo "1) git pull | 2) git push"
-                            prompt_input "Acción [1-2]: " g_act
-                            if [[ "$g_act" == "1" ]]; then
-                                git pull
-                            elif [[ "$g_act" == "2" ]]; then
-                                local default_msg="Actualiza prom.sh"
-                                prompt_input "Mensaje para commit [Default: '$default_msg']: " git_msg
-                                git_msg="${git_msg:-$default_msg}"
-                                git add . && git commit -m "$git_msg" && git push
+                            local default_msg="Actualiza prom.sh"
+                            prompt_input "Mensaje para commit [Default: '$default_msg']: " git_msg
+                            git_msg="${git_msg:-$default_msg}"
+                            
+                            echo "[-] Subiendo cambios..."
+                            git add . && git commit -m "$git_msg" && git push
+                            log_action "Git: Push ejecutado ($git_msg)"
+                            pause_screen
+                            ;;
+                        6)
+                            echo ""
+                            prompt_input "Nombre de la nueva rama (ej: feature-red, fix-docker): " new_branch
+                            if [[ -n "$new_branch" ]]; then
+                                echo "[-] Creando y cambiando a la rama '$new_branch'..."
+                                git checkout -b "$new_branch"
+                                log_action "Git: Nueva rama creada ($new_branch)"
+                            fi
+                            pause_screen
+                            ;;
+                        7)
+                            echo ""
+                            echo "[!] ADVERTENCIA: Esto borrará TODOS los cambios no guardados (commits) en los archivos."
+                            prompt_input "¿Estás seguro de descartar los cambios locales? (s/n): " confirm
+                            if [[ "$confirm" == "s" || "$confirm" == "S" ]]; then
+                                echo "[-] Descartando cambios..."
+                                git restore . 2>/dev/null || git checkout . 2>/dev/null
+                                echo "[OK] Cambios locales descartados."
+                                log_action "Git: Cambios locales descartados"
+                            else
+                                echo "[-] Operación cancelada."
                             fi
                             pause_screen
                             ;;
@@ -903,6 +971,214 @@ menu() {
                 done
                 ;;
             8)
+                while true; do
+                    clear
+                    echo "===================================================================="
+                    echo "              TAREAS PROGRAMADAS (CRON) Y LOGS DEL SISTEMA          "
+                    echo "===================================================================="
+                    echo " 1) Listar mis tareas programadas (crontab actual)"
+                    echo " 2) Editar mis tareas programadas (crontab -e)"
+                    echo " 3) Listar tareas del sistema (/etc/crontab y /etc/cron.d/)"
+                    echo ""
+                    echo " 4) Listar carpetas y archivos de logs comunes (por tamaño)"
+                    echo " 5) Ver un log en tiempo real (tail -f) [Interactivo]"
+                    echo " 6) Buscar errores recientes en un log [Interactivo]"
+                    echo ""
+                    echo " q) Volver al menú principal"
+                    echo "=========================================================="
+                    prompt_input "Elige una opción [1-6 o q]: " cron_log_opt
+                    
+                    case $cron_log_opt in
+                        1)
+                            echo ""
+                            echo "[-] Tareas cron del usuario actual ($USER):"
+                            echo "------------------------------------------"
+                            crontab -l 2>/dev/null || echo "No hay tareas programadas para este usuario."
+                            pause_screen
+                            ;;
+                        2)
+                            echo ""
+                            echo "[-] Abriendo editor de crontab (guarda y sal para aplicar)..."
+                            crontab -e
+                            log_action "Cron: Edición de crontab de usuario"
+                            pause_screen
+                            ;;
+                        3)
+                            echo ""
+                            echo "[-] Tareas programadas del sistema:"
+                            echo "--- /etc/crontab ---"
+                            cat /etc/crontab 2>/dev/null | grep -v "^#" | grep -v "^$"
+                            echo ""
+                            echo "--- Archivos en /etc/cron.d/ ---"
+                            if [[ -d /etc/cron.d ]]; then
+                                ls -1 /etc/cron.d/ 2>/dev/null
+                            else
+                                echo "(Directorio no existe o está vacío)"
+                            fi
+                            pause_screen
+                            ;;
+                        4)
+                            echo ""
+                            echo "[-] Buscando directorios de logs comunes..."
+                            local log_dirs=("/var/log" "/var/log/apache2" "/var/log/nginx" "/var/log/mysql" "/var/log/httpd")
+                            
+                            for dir in "${log_dirs[@]}"; do
+                                if [[ -d "$dir" ]]; then
+                                    echo ""
+                                    echo "--- Contenido de $dir (Top 10 archivos más grandes) ---"
+                                    find "$dir" -maxdepth 1 -type f -exec ls -lhS {} + 2>/dev/null | awk 'NR<=10 {printf " %-8s %-6s %-12s %s\n", $5, $6$7, $8, $9}'
+                                fi
+                            done
+                            pause_screen
+                            ;;
+                        5)
+                            echo ""
+                            echo "[-] Buscando archivos de log de texto comunes..."
+                            local logs_found=($(find /var/log -maxdepth 2 -type f ! -name "*.gz" ! -name "*.xz" ! -name "*.zip" ! -name "btmp*" ! -name "wtmp*" ! -name "lastlog" 2>/dev/null | sort))
+                            
+                            if [[ ${#logs_found[@]} -eq 0 ]]; then
+                                echo "[!] No se encontraron archivos de log de texto."
+                                pause_screen
+                                continue
+                            fi
+
+                            echo ""
+                            local i=1
+                            for logfile in "${logs_found[@]}"; do
+                                printf " %2d) %s\n" "$i" "$logfile"
+                                ((i++))
+                            done
+                            
+                            echo ""
+                            prompt_input "Selecciona el número del log a ver (o 'q' para cancelar): " log_num
+                            if [[ "$log_num" == "q" || -z "$log_num" ]]; then
+                                continue
+                            fi
+                            
+                            if [[ "$log_num" =~ ^[0-9]+$ ]] && (( log_num >= 1 && log_num <= ${#logs_found[@]} )); then
+                                local target_log="${logs_found[$log_num]}"
+                                echo "[-] Mostrando '$target_log' en vivo (Presiona Ctrl+C para salir)..."
+                                sleep 1
+                                sudo tail -f "$target_log"
+                                log_action "Logs: Tail -f en $target_log"
+                            else
+                                echo "[ERROR] Selección no válida."
+                            fi
+                            pause_screen
+                            ;;
+                        6)
+                            echo ""
+                            echo "[-] Buscando archivos de log de texto comunes..."
+                            local logs_found=($(find /var/log -maxdepth 2 -type f ! -name "*.gz" ! -name "*.xz" ! -name "*.zip" ! -name "btmp*" ! -name "wtmp*" ! -name "lastlog" 2>/dev/null | sort))
+                            
+                            if [[ ${#logs_found[@]} -eq 0 ]]; then
+                                echo "[!] No se encontraron archivos de log de texto."
+                                pause_screen
+                                continue
+                            fi
+
+                            echo ""
+                            local i=1
+                            for logfile in "${logs_found[@]}"; do
+                                printf " %2d) %s\n" "$i" "$logfile"
+                                ((i++))
+                            done
+                            
+                            echo ""
+                            prompt_input "Selecciona el número del log a analizar (o 'q' para cancelar): " log_num
+                            if [[ "$log_num" == "q" || -z "$log_num" ]]; then
+                                continue
+                            fi
+                            
+                            if [[ "$log_num" =~ ^[0-9]+$ ]] && (( log_num >= 1 && log_num <= ${#logs_found[@]} )); then
+                                local target_log="${logs_found[$log_num]}"
+                                echo ""
+                                echo "[-] Buscando errores/fallos en las últimas 100 líneas de '$target_log':"
+                                echo "--------------------------------------------------------"
+                                sudo tail -n 100 "$target_log" | grep -iE "error|fail|crit|warn|severe|denied|refused" || echo "No se encontraron patrones de error recientes."
+                                log_action "Logs: Filtro de errores en $target_log"
+                            else
+                                echo "[ERROR] Selección no válida."
+                            fi
+                            pause_screen
+                            ;;
+                        q|[qQ]) break ;;
+                    esac
+                done
+                ;;
+            9)
+                while true; do
+                    clear
+                    echo "=========================================="
+                    echo "     AUDITORÍA DE RED Y SEGURIDAD (NMAP)"
+                    echo "=========================================="
+
+                    if ! need nmap; then
+                        pause_screen
+                        break
+                    fi
+
+                    clear
+                    echo "=========================================="
+                    echo "     AUDITORÍA DE RED Y SEGURIDAD (NMAP)"
+                    echo "=========================================="
+                    echo "[STATUS] : INSTALADO Y OPERATIVO ($(nmap --version | head -n 1))"
+                    echo "------------------------------------------"
+                    echo " 1) Escaneo rápido de puertos abiertos en IP/Host"
+                    echo " 2) Escaneo completo con detección de versiones (-sV)"
+                    echo " 3) Escaneo agresivo (SO, versiones y scripts -A)"
+                    echo " 4) Escaneo de red local (descubrimiento de hosts activos)"
+                    echo ""
+                    echo " q) Volver al menú principal"
+                    echo "=========================================="
+                    prompt_input "Elige una opción [1-4 o q]: " nmap_opt
+
+                    case $nmap_opt in
+                        1)
+                            echo ""
+                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
+                            if [[ -n "$target_ip" ]]; then
+                                echo "[-] Ejecutando escaneo rápido en '$target_ip'..."
+                                nmap -T4 "$target_ip"
+                                log_action "Nmap: Escaneo rápido en $target_ip"
+                            fi
+                            pause_screen
+                            ;;
+                        2)
+                            echo ""
+                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
+                            if [[ -n "$target_ip" ]]; then
+                                echo "[-] Ejecutando detección de versiones (-sV) en '$target_ip'..."
+                                sudo nmap -sV -T4 "$target_ip"
+                                log_action "Nmap: Escaneo de versiones en $target_ip"
+                            fi
+                            pause_screen
+                            ;;
+                        3)
+                            echo ""
+                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
+                            if [[ -n "$target_ip" ]]; then
+                                echo "[-] Ejecutando escaneo agresivo (-A) en '$target_ip'..."
+                                sudo nmap -A -T4 "$target_ip"
+                                log_action "Nmap: Escaneo agresivo en $target_ip"
+                            fi
+                            pause_screen
+                            ;;
+                        4)
+                            echo ""
+                            prompt_input "Ingresa el rango de red (ej: 192.168.1.0/24): " target_net
+                            if [[ -n "$target_net" ]]; then
+                                echo "[-] Descubriendo hosts activos en '$target_net'..."
+                                nmap -sn "$target_net"
+                                log_action "Nmap: Ping scan en red $target_net"
+                            fi
+                            pause_screen
+                            ;;
+                        q|[qQ]) break ;;
+                    esac
+                done
+                ;;
+            10)
                 while true; do
                     clear
                     echo "=========================================="
@@ -1138,78 +1414,6 @@ menu() {
                                 -H "User-Agent: Mozilla/5.0" \
                                 "https://speed.cloudflare.com/__down?bytes=25000000"
                             log_action "Red Avanzada: Speedtest Cloudflare"
-                            pause_screen
-                            ;;
-                        q|[qQ]) break ;;
-                    esac
-                done
-                ;;
-            9)
-                while true; do
-                    clear
-                    echo "=========================================="
-                    echo "     AUDITORÍA DE RED Y SEGURIDAD (NMAP)"
-                    echo "=========================================="
-
-                    if ! need nmap; then
-                        pause_screen
-                        break
-                    fi
-
-                    clear
-                    echo "=========================================="
-                    echo "     AUDITORÍA DE RED Y SEGURIDAD (NMAP)"
-                    echo "=========================================="
-                    echo "[STATUS] : INSTALADO Y OPERATIVO ($(nmap --version | head -n 1))"
-                    echo "------------------------------------------"
-                    echo " 1) Escaneo rápido de puertos abiertos en IP/Host"
-                    echo " 2) Escaneo completo con detección de versiones (-sV)"
-                    echo " 3) Escaneo agresivo (SO, versiones y scripts -A)"
-                    echo " 4) Escaneo de red local (descubrimiento de hosts activos)"
-                    echo ""
-                    echo " q) Volver al menú principal"
-                    echo "=========================================="
-                    prompt_input "Elige una opción [1-4 o q]: " nmap_opt
-
-                    case $nmap_opt in
-                        1)
-                            echo ""
-                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
-                            if [[ -n "$target_ip" ]]; then
-                                echo "[-] Ejecutando escaneo rápido en '$target_ip'..."
-                                nmap -T4 "$target_ip"
-                                log_action "Nmap: Escaneo rápido en $target_ip"
-                            fi
-                            pause_screen
-                            ;;
-                        2)
-                            echo ""
-                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
-                            if [[ -n "$target_ip" ]]; then
-                                echo "[-] Ejecutando detección de versiones (-sV) en '$target_ip'..."
-                                sudo nmap -sV -T4 "$target_ip"
-                                log_action "Nmap: Escaneo de versiones en $target_ip"
-                            fi
-                            pause_screen
-                            ;;
-                        3)
-                            echo ""
-                            prompt_input "Ingresa la IP o hostname objetivo: " target_ip
-                            if [[ -n "$target_ip" ]]; then
-                                echo "[-] Ejecutando escaneo agresivo (-A) en '$target_ip'..."
-                                sudo nmap -A -T4 "$target_ip":wq
-                                log_action "Nmap: Escaneo agresivo en $target_ip"
-                            fi
-                            pause_screen
-                            ;;
-                        4)
-                            echo ""
-                            prompt_input "Ingresa el rango de red (ej: 192.168.1.0/24): " target_net
-                            if [[ -n "$target_net" ]]; then
-                                echo "[-] Descubriendo hosts activos en '$target_net'..."
-                                nmap -sn "$target_net"
-                                log_action "Nmap: Ping scan en red $target_net"
-                            fi
                             pause_screen
                             ;;
                         q|[qQ]) break ;;
