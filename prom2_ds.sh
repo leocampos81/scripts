@@ -25,6 +25,10 @@
 #      - Submenú exclusivo para Ansible (inventarios, ping, playbooks).
 #      - Submenú exclusivo para Terraform (init, plan, fmt, directorios).
 #      - Búsqueda dinámica de archivos .yml y .tf en rutas típicas.
+#
+#  [2026-11-13] - dsv1.1 (Rama DeepSeek)
+#    * Integración del banner visual desde banner.sh.
+#    * Corrección de find_workdir (redirección de prompt a stderr).
 # ==============================================================================
 
 # --- Opciones de zsh ----------------------------------------------------------
@@ -32,7 +36,7 @@ setopt TYPESET_SILENT NO_BEEP
 export LC_NUMERIC=C
 
 # --- Rutas y variables globales ------------------------------------------------
-VERSION="dsv1"
+VERSION="dsv1.1"
 SCRIPT_NAME="${0:t}"
 REPO_DIR="${PROM_REPO_DIR:-$HOME/.local/bin/scripts}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/prometherion"
@@ -311,16 +315,22 @@ run_menu() {
 #  BANNER
 # ==============================================================================
 banner_main() {
-    print "╔══════════════════════════════════════════════════════════════════╗"
-    print "║                                                                  ║"
-    print "║                  P R O M E T H E R I O N  2 1 1 2                ║"
-    print "║                 S Y S A D M I N   D A S H B O A R D              ║"
-    print "║                                                                  ║"
-    print "╚══════════════════════════════════════════════════════════════════╝"
-    print -r -- "[*] Usuario Activo : $USER@$HOST"
-    print -r -- "[*] Servidor actual: $OS_NAME"
-    print -r -- "[*] Gestor paquetes: $PKG_MGR"
-    print -r -- "[*] Versión script : v$VERSION ($SCRIPT_NAME)"
+    # Si existe banner.sh en el mismo directorio, ejecutarlo
+    if [[ -x "${0:A:h}/banner.sh" ]]; then
+        "${0:A:h}/banner.sh"
+    else
+        # Fallback: banner ASCII interno
+        print "╔══════════════════════════════════════════════════════════════════╗"
+        print "║                                                                  ║"
+        print "║                  P R O M E T H E R I O N  2 1 1 2                ║"
+        print "║                 S Y S A D M I N   D A S H B O A R D              ║"
+        print "║                                                                  ║"
+        print "╚══════════════════════════════════════════════════════════════════╝"
+        print -r -- "[*] Usuario Activo : $USER@$HOST"
+        print -r -- "[*] Servidor actual: $OS_NAME"
+        print -r -- "[*] Gestor paquetes: $PKG_MGR"
+        print -r -- "[*] Versión script : v$VERSION ($SCRIPT_NAME)"
+    fi
 }
 
 # ==============================================================================
@@ -1190,7 +1200,7 @@ find_workdir() {
     [[ -z "$default_dir" ]] && default_dir="$PWD"
     
     local workdir
-    prompt_input "Directorio donde buscar [Default: $default_dir]: " workdir
+    prompt_input "Directorio donde buscar [Default: $default_dir]: " workdir >&2
     print -r -- "${workdir:-$default_dir}"
 }
 
