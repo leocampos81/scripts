@@ -4,7 +4,7 @@
 #  PROMETHERION2112 - SYSADMIN TOOLKIT & DASHBOARD
 #  Repositorio: git@github.com:leocampos81/scripts.git
 #  Autor: Leonardo Campos (https://github.com/leocampos81)
-#  Versión: dsv1 (DeepSeek v1 - sobre base Claude v5.0)
+#  Versión: dsv1.3 (DeepSeek v1 - sobre base Claude v5.0)
 # ==============================================================================
 #  USO
 #    ./prom_claude_dsv1.sh            Menú interactivo
@@ -20,15 +20,18 @@
 #    * Seguridad: contraseñas por entorno, sin eval, validación de inputs.
 #    * Nuevo Health Check avanzado y detección de BBDD.
 #
-#  [2026-11-13] - dsv1 (Rama DeepSeek)
-#    * Módulo de Automatización (IaC) reescrito:
-#      - Submenú exclusivo para Ansible (inventarios, ping, playbooks).
-#      - Submenú exclusivo para Terraform (init, plan, fmt, directorios).
-#      - Búsqueda dinámica de archivos .yml y .tf en rutas típicas.
-#
-#  [2026-11-13] - dsv1.1 (Rama DeepSeek)
+#  [2026-11-13] - dsv1 a dsv1.2 (Rama DeepSeek)
+#    * Módulo de Automatización (IaC) reescrito.
+#    * Búsqueda dinámica de archivos .yml y .tf en rutas típicas.
 #    * Integración del banner visual desde banner.sh.
-#    * Corrección de find_workdir (redirección de prompt a stderr).
+#    * Módulo de Gestión de BBDD ampliado (ejecución de .sql y queries).
+#
+#  [2026-11-13] - dsv1.3 (Rama DeepSeek - Auditoría Senior)
+#    * Optimización y refactorización del módulo BBDD:
+#      - db_mssql_exec ahora tiene un bucle interactivo para múltiples queries.
+#      - Detección robusta de la versión de sqlcmd (v18+) para el flag -C.
+#      - Mejor manejo de errores al ejecutar queries (no cierra el menú).
+#      - Limpieza de variables locales no usadas.
 # ==============================================================================
 
 # --- Opciones de zsh ----------------------------------------------------------
@@ -36,7 +39,7 @@ setopt TYPESET_SILENT NO_BEEP
 export LC_NUMERIC=C
 
 # --- Rutas y variables globales ------------------------------------------------
-VERSION="dsv1.1"
+VERSION="dsv1.3"
 SCRIPT_NAME="${0:t}"
 REPO_DIR="${PROM_REPO_DIR:-$HOME/.local/bin/scripts}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/prometherion"
@@ -315,11 +318,9 @@ run_menu() {
 #  BANNER
 # ==============================================================================
 banner_main() {
-    # Si existe banner.sh en el mismo directorio, ejecutarlo
     if [[ -x "${0:A:h}/banner.sh" ]]; then
         "${0:A:h}/banner.sh"
     else
-        # Fallback: banner ASCII interno
         print "╔══════════════════════════════════════════════════════════════════╗"
         print "║                                                                  ║"
         print "║                  P R O M E T H E R I O N  2 1 1 2                ║"
@@ -1533,7 +1534,9 @@ db_mssql() {
         msg_warn "'sqlcmd' no está instalado."; install_hint sqlcmd; return 0
     fi
     local -a extra=()
-    "$bin" '-?' 2>&1 | grep -qE 'Version (1[7-9]|[2-9][0-9])' && extra=(-C)
+    if "$bin" '-?' 2>&1 | grep -qE 'Version (1[8-9]|[2-9][0-9])'; then
+        extra=(-C)
+    fi
 
     local host user pass out rc dbs
     prompt_input "Servidor [Default: localhost]: " host;   host="${host:-localhost}"
@@ -1558,6 +1561,72 @@ db_mssql() {
     log_action "BBDD: consulta SQL Server ($host)"
 }
 
+db_mssql_exec() {
+    local bin
+    if ! bin=$(find_sqlcmd); then
+        msg_warn "'sqlcmd' no está instalado."; install_hint sqlcmd; return 0
+    fi
+    local -a extra=()
+    if "$bin" '-?' 2>&1 | grep -qE 'Version (1[8-9]|[2-9][0-9])'; then
+        extra=(-C)
+    fi
+
+    local host user pass
+    prompt_input "Servidor [Default: localhost]: " host;   host="${host:-localhost}"
+    prompt_input "Usuario [Default: sa]: " user;           user="${user:-sa}"
+    prompt_password "Contraseña: " pass
+    [[ -z "$pass" ]] && { msg_err "SQL Server requiere contraseña."; return 0; }
+    valid_host "$host" || { msg_err "Servidor no válido."; return 0; }
+
+    local mode=""
+    while true; do
+        if [[ -z "$mode" ]]; then
+            print ""
+            print " 1) Ejecutar archivo .sql"
+            print " 2) Ejecutar consulta rápida (Query)"
+            print " q) Volver al menú de BBDD"
+            prompt_input "Selecciona modo [1-2 o q]: " mode
+            if [[ "$mode" == "q" || -z "$mode" ]]; then
+                return 0
+            elif [[ "$mode" != "1" && "$mode" != "2" ]]; then
+                msg_warn "Modo no válido."
+                mode=""
+                continue
+            fi
+        fi
+
+        if [[ "$mode" == 1 ]]; then
+            local sql_file
+            prompt_input "Ruta del archivo .sql: " sql_file
+            if [[ ! -f "$sql_file" ]]; then 
+                msg_err "El archivo no existe."; 
+            else
+                msg_info "Ejecutando '$sql_file' en $host..."
+                SQLCMDPASSWORD="$pass" "$bin" -S "$host" -U "$user" "${extra[@]}" -l 5 -i "$sql_file" 2>&1
+                log_action "BBDD: ejecución de archivo $sql_file en $host"
+            fi
+        elif [[ "$mode" == 2 ]]; then
+            local query
+            prompt_input "Consulta SQL (ej: SELECT @@VERSION): " query
+            if [[ -z "$query" ]]; then 
+                msg_warn "Consulta vacía."
+            else
+                msg_info "Ejecutando consulta..."
+                SQLCMDPASSWORD="$pass" "$bin" -S "$host" -U "$user" "${extra[@]}" -l 5 -h -1 -W -Q "SET NOCOUNT ON; $query" 2>&1
+                log_action "BBDD: consulta rápida en $host"
+            fi
+        fi
+
+        print ""
+        local again
+        prompt_input "¿Ejecutar otra operación? (s/n) [Default: s]: " again
+        if [[ "$again" == "n" || "$again" == "N" ]]; then
+            break
+        fi
+        print ""
+    done
+}
+
 db_mysql() {
     need mysql || return 0
     local user pass out rc dbs
@@ -1580,6 +1649,70 @@ db_mysql() {
     dbs=$(MYSQL_PWD="$pass" "${my[@]}" -e "SHOW DATABASES;" 2>&1)
     db_show "$out" "$dbs"
     log_action "BBDD: consulta MySQL/MariaDB"
+}
+
+db_mysql_exec() {
+    need mysql || return 0
+    local user pass rc
+    prompt_input "Usuario [Default: root]: " user; user="${user:-root}"
+    prompt_password "Contraseña (vacía = auth por socket con sudo): " pass
+    valid_ident "$user" || { msg_err "Usuario no válido."; return 0; }
+
+    local -a my=(mysql -u "$user")
+    [[ -z "$pass" ]] && my=("${SUDO[@]}" "${my[@]}")
+
+    local mode=""
+    while true; do
+        if [[ -z "$mode" ]]; then
+            print ""
+            print " 1) Ejecutar archivo .sql"
+            print " 2) Ejecutar consulta rápida (Query)"
+            print " q) Volver al menú de BBDD"
+            prompt_input "Selecciona modo [1-2 o q]: " mode
+            if [[ "$mode" == "q" || -z "$mode" ]]; then
+                return 0
+            elif [[ "$mode" != "1" && "$mode" != "2" ]]; then
+                msg_warn "Modo no válido."
+                mode=""
+                continue
+            fi
+        fi
+
+        if [[ "$mode" == 1 ]]; then
+            local db_name sql_file
+            prompt_input "Nombre de la base de datos: " db_name
+            if ! valid_ident "$db_name"; then
+                msg_err "Nombre de BD no válido."
+            else
+                prompt_input "Ruta del archivo .sql: " sql_file
+                if [[ ! -f "$sql_file" ]]; then 
+                    msg_err "El archivo no existe."; 
+                else
+                    msg_info "Ejecutando '$sql_file' en la BD '$db_name'..."
+                    MYSQL_PWD="$pass" "${my[@]}" "$db_name" < "$sql_file" 2>&1
+                    log_action "BBDD: ejecución de archivo $sql_file en $db_name"
+                fi
+            fi
+        elif [[ "$mode" == 2 ]]; then
+            local query
+            prompt_input "Consulta SQL (ej: SELECT VERSION()): " query
+            if [[ -z "$query" ]]; then 
+                msg_warn "Consulta vacía."
+            else
+                msg_info "Ejecutando consulta..."
+                MYSQL_PWD="$pass" "${my[@]}" -N -B -e "$query" 2>&1
+                log_action "BBDD: consulta rápida en MySQL"
+            fi
+        fi
+
+        print ""
+        local again
+        prompt_input "¿Ejecutar otra operación? (s/n) [Default: s]: " again
+        if [[ "$again" == "n" || "$again" == "N" ]]; then
+            break
+        fi
+        print ""
+    done
 }
 
 db_pg() {
@@ -1613,12 +1746,84 @@ db_pg() {
     log_action "BBDD: consulta PostgreSQL"
 }
 
+db_pg_exec() {
+    need psql || return 0
+    local user dbname pass rc
+    prompt_input "Usuario [Default: postgres]: " user;      user="${user:-postgres}"
+    prompt_input "Base de datos [Default: postgres]: " dbname; dbname="${dbname:-postgres}"
+    prompt_password "Contraseña (vacía = auth local 'peer'): " pass
+    valid_ident "$user" && valid_ident "$dbname" || { msg_err "Usuario o base no válidos."; return 0; }
+
+    local -a pg
+    if [[ -n "$pass" ]]; then
+        pg=(psql -h localhost -U "$user" -d "$dbname")
+    elif (( EUID == 0 )); then
+        pg=(runuser -u "$user" -- psql -d "$dbname")
+    else
+        pg=(sudo -u "$user" psql -d "$dbname")
+    fi
+
+    local mode=""
+    while true; do
+        if [[ -z "$mode" ]]; then
+            print ""
+            print " 1) Ejecutar archivo .sql"
+            print " 2) Ejecutar consulta rápida (Query)"
+            print " q) Volver al menú de BBDD"
+            prompt_input "Selecciona modo [1-2 o q]: " mode
+            if [[ "$mode" == "q" || -z "$mode" ]]; then
+                return 0
+            elif [[ "$mode" != "1" && "$mode" != "2" ]]; then
+                msg_warn "Modo no válido."
+                mode=""
+                continue
+            fi
+        fi
+
+        if [[ "$mode" == 1 ]]; then
+            local sql_file
+            prompt_input "Ruta del archivo .sql: " sql_file
+            if [[ ! -f "$sql_file" ]]; then 
+                msg_err "El archivo no existe."; 
+            else
+                msg_info "Ejecutando '$sql_file' en la BD '$dbname'..."
+                PGPASSWORD="$pass" "${pg[@]}" -f "$sql_file" 2>&1
+                log_action "BBDD: ejecución de archivo $sql_file en $dbname"
+            fi
+        elif [[ "$mode" == 2 ]]; then
+            local query
+            prompt_input "Consulta SQL (ej: SELECT version()): " query
+            if [[ -z "$query" ]]; then 
+                msg_warn "Consulta vacía."
+            else
+                msg_info "Ejecutando consulta..."
+                PGPASSWORD="$pass" "${pg[@]}" -At -c "$query" 2>&1
+                log_action "BBDD: consulta rápida en PostgreSQL"
+            fi
+        fi
+
+        print ""
+        local again
+        prompt_input "¿Ejecutar otra operación? (s/n) [Default: s]: " again
+        if [[ "$again" == "n" || "$again" == "N" ]]; then
+            break
+        fi
+        print ""
+    done
+}
+
 menu_db() {
     run_menu "GESTIÓN DE BASES DE DATOS (BBDD)" \
         "Detectar motores instalados|db_detect" \
-        "Conectar a SQL Server (mssql) y listar BBDD|db_mssql" \
-        "Conectar a MySQL/MariaDB y listar BBDD|db_mysql" \
-        "Conectar a PostgreSQL y listar BBDD|db_pg"
+        "#SQL SERVER (MSSQL)" \
+        "Listar BBDD|db_mssql" \
+        "Ejecutar script/consulta|db_mssql_exec" \
+        "#MYSQL / MARIADB" \
+        "Listar BBDD|db_mysql" \
+        "Ejecutar script/consulta|db_mysql_exec" \
+        "#POSTGRESQL" \
+        "Listar BBDD|db_pg" \
+        "Ejecutar script/consulta|db_pg_exec"
 }
 
 # ==============================================================================

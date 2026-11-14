@@ -36,11 +36,11 @@ function welcome_today () {
   echo -e "\033[1;34mToday\n------"
 
   # Print last login in the format: "Last Login: Day Month Date HH:MM on tty"
-  last_login=$(last | grep "^$USER " | head -1 | awk '{print "⏲️  Last Login: "$4" "$5" "$6" "$7" on "$2}')
+  last_login=$(last | grep "^$USER " | head -1 | awk '{print "⏲️  Ultima Conexion: "$4" "$5" "$6" "$7" on "$2}')
   echo -e "${COLOR_S}${last_login}"
 
   # Print date time
-  echo -e "$COLOR_S$(date '+🗓️  Date: %A, %B %d, %Y at %H:%M')"
+  echo -e "$COLOR_S$(date '+🗓️  Fecha: %A, %B %d, %Y at %H:%M')"
 
   # Print local weather
   curl -s -m $timeout "https://wttr.in?format=%cWeather:+%C+%t,+%p+%w"
