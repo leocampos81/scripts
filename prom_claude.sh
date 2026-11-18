@@ -4,7 +4,7 @@
 #  PROMETHERION2112 - SYSADMIN TOOLKIT & DASHBOARD  (edición prom_claude)
 #  Repositorio: git@github.com:leocampos81/scripts.git
 #  Autor: Leonardo Campos (https://github.com/leocampos81)
-#  Refactor v5.0: Claude (sobre la base v4.8 de la Rama DS)
+#  Refactor v5.x: Claude (sobre la base v4.8 de la Rama DS, con aportes de DS dsv1.3)
 # ==============================================================================
 #  USO
 #    ./prom_claude.sh            Menú interactivo
@@ -19,6 +19,38 @@
 # ==============================================================================
 #  BITÁCORA DE CAMBIOS (CHANGELOG)
 # ==============================================================================
+#  [2026-11-14] - v5.2 (Rama Claude) - candidata a liberación
+#    FUSIÓN CON LA RAMA DS (lo mejor de dsv1.3, con guardarraíles)
+#      * BBDD: ejecutar .sql y consultas rápidas en SQL Server, MySQL/MariaDB y
+#        PostgreSQL (idea DS). Nuevo: sql_guard pide confirmación si el SQL
+#        modifica datos/estructura y exige escribir CONFIRMAR si hay
+#        DELETE/UPDATE sin WHERE; confirma el archivo antes de correrlo; se
+#        puede cambiar entre archivo/consulta sin salir de la sesión; PostgreSQL
+#        con ON_ERROR_STOP y transacción opcional; los .sql entran por stdin
+#        (con 'sudo -u postgres' el usuario postgres no lee tu /home).
+#      * banner.sh externo opcional (idea DS), ahora resuelto con SCRIPT_DIR.
+#    CORRECCIONES
+#      * banner.sh solo se hallaba si el cwd era la carpeta del script ($0 dentro
+#        de una función es el nombre de la función).
+#      * git pull: sin merge automático ni editor; si las ramas divergieron
+#        pregunta (merge / rebase / cancelar) y distingue otras causas de error.
+#      * ansible-playbook se ejecuta desde la carpeta del playbook (respeta su
+#        ansible.cfg y roles/).
+#
+#  [2026-11-13] - v5.1 (Rama Claude)
+#    AUTOMATIZACIÓN (menú 7) completamente rehecho
+#      * Panel de estado dinámico bajo el título (run_menu soporta MENU_HOOK).
+#      * Autodescubre inventarios, playbooks y proyectos *.tf bajo
+#        PROM_AUTOMATION_DIR (default $HOME), sin entrar a .git/.terraform/etc.
+#      * Ansible: ping con resumen OK/fallos, facts de distro, ad-hoc guiado,
+#        --limit, flujo sintaxis > lint > --check > run (avisa si no hubo
+#        check), lista los hosts afectados antes de ejecutar, galaxy, vault.
+#      * Terraform y OpenTofu (autodetecta 'tofu'): init/validate/fmt, plan
+#        con -out, drift (-detailed-exitcode), APPLY solo desde plan guardado
+#        con confirmación escribiendo el nombre del proyecto, DESTROY con
+#        confirmación reforzada, state, outputs, workspaces, var-file.
+#      * Avisa si el provider necesita Docker/libvirt y el servicio no corre.
+#
 #  [2026-11-12] - v5.0 (Rama Claude)
 #    ARQUITECTURA
 #      * Menús dirigidos por datos (run_menu): una función por acción, sin
@@ -67,8 +99,9 @@ setopt TYPESET_SILENT NO_BEEP
 export LC_NUMERIC=C
 
 # --- Rutas y variables globales ------------------------------------------------
-VERSION="5.0"
+VERSION="5.2"
 SCRIPT_NAME="${0:t}"
+SCRIPT_DIR="${0:A:h}"
 REPO_DIR="${PROM_REPO_DIR:-$HOME/.local/bin/scripts}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/prometherion"
 LOG_FILE="$STATE_DIR/sysadmin.log"
@@ -243,7 +276,7 @@ install_hint() {
     case "$1" in
         sqlcmd)    msg_info "Instala mssql-tools18 desde el repo de Microsoft:"
                    msg_info "https://learn.microsoft.com/sql/linux/sql-server-linux-setup-tools" ;;
-        terraform) msg_info "Terraform no viene en los repos base: https://developer.hashicorp.com/terraform/install" ;;
+        terraform) msg_info "Terraform no viene en los repos base: https://developer.hashicorp.com/terraform/install (o OpenTofu: https://opentofu.org/docs/intro/install/)" ;;
         docker)    msg_info "Si el paquete falla, usa el repo oficial: https://docs.docker.com/engine/install/" ;;
         *)         msg_warn "No conozco un paquete para '$1' en $PKG_MGR." ;;
     esac
@@ -304,7 +337,7 @@ run_menu() {
     local title="$1"; shift
     local -a items=("$@") parts
     local -A map
-    local choice it n fn flag quit_label="Volver al menú anterior"
+    local choice it n fn flag hook="${MENU_HOOK:-}" quit_label="Volver al menú anterior"
     [[ "$title" == __MAIN__ ]] && quit_label="Salir"
 
     while true; do
@@ -317,6 +350,7 @@ run_menu() {
             print -r -- "  $title"
             print "=========================================================="
         fi
+        [[ -n "$hook" ]] && "$hook"
 
         n=0
         for it in "${items[@]}"; do
@@ -357,6 +391,11 @@ run_menu() {
 #  BANNER
 # ==============================================================================
 banner_main() {
+    # banner.sh opcional junto al script (SCRIPT_DIR se calcula al inicio: dentro
+    # de una función $0 es el nombre de la función y no sirve para esto)
+    if [[ -x "$SCRIPT_DIR/banner.sh" ]] && "$SCRIPT_DIR/banner.sh"; then
+        return 0
+    fi
     print "╔══════════════════════════════════════════════════════════════════╗"
     print "║                                                                  ║"
     print "║                  P R O M E T H E R I O N  2 1 1 2                ║"
@@ -1013,8 +1052,28 @@ git_log() {
 git_pull() {
     git_ok || return 0
     msg_info "Descargando cambios (git pull --ff-only)..."
-    git -C "$REPO_DIR" pull --ff-only
-    log_action "Git: pull"
+    if git -C "$REPO_DIR" pull --ff-only; then log_action "Git: pull (ff-only)"; return 0; fi
+
+    local counts ahead behind
+    counts=$(git -C "$REPO_DIR" rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null)
+    ahead="${counts%%[[:space:]]*}"; behind="${counts##*[[:space:]]}"
+    if [[ "$ahead" == <-> && "$behind" == <-> ]] && (( ahead > 0 && behind > 0 )); then
+        msg_warn "Las ramas divergieron: $ahead commit(s) locales y $behind remoto(s)."
+        local choice
+        print " 1) Merge  (git pull --no-rebase --no-edit)"
+        print " 2) Rebase (git pull --rebase)"
+        print " 3) Cancelar y revisar a mano"
+        prompt_input "Elige [1-3]: " choice
+        case "$choice" in
+            1) git -C "$REPO_DIR" pull --no-rebase --no-edit ;;
+            2) git -C "$REPO_DIR" pull --rebase ;;
+            *) msg_info "Cancelado."; return 0 ;;
+        esac
+        if (( $? != 0 )); then msg_err "Hay conflictos: resuélvelos en $REPO_DIR (git status) o aborta con git merge/rebase --abort."; fi
+        log_action "Git: pull con ramas divergidas (opción $choice)"
+    else
+        msg_err "El pull falló por otra causa (red, credenciales o cambios locales sin commitear). Revisa el mensaje anterior."
+    fi
 }
 
 git_push() {
@@ -1215,15 +1274,646 @@ menu_utils() {
 }
 
 # ==============================================================================
-#  7) AUTOMATIZACIÓN
+#  7) AUTOMATIZACIÓN: ANSIBLE Y TERRAFORM / OPENTOFU
+#     Descubre proyectos bajo AUTO_BASE (default $HOME; cámbialo con
+#     PROM_AUTOMATION_DIR o desde el menú) y guía los flujos con guardarraíles.
 # ==============================================================================
-aut_ansible()   { need ansible   || return 0; ansible --version; }
-aut_terraform() { need terraform || return 0; terraform version; }
+AUTO_BASE="${PROM_AUTOMATION_DIR:-$HOME}"
+AUTO_PRUNE=( '(' -name .git -o -name .terraform -o -name .ansible -o -name ansible_collections
+             -o -name node_modules -o -name .cache -o -name venv -o -name .venv
+             -o -name site-packages -o -name snap -o -name .local ')' -prune -o )
+PICKED=""
+ANS_VER=""; ANS_CFG=""; ANS_INV=""; ANS_INV_INFO=""; ANS_PLAY=""; ANS_LIMIT=""; ANS_CHECKED=""
+typeset -a ANS_ARGS
+TF_BIN=""; TF_VER=""; TF_DIR=""; TF_VARFILE=""; TF_PLAN="prom.tfplan"
+typeset -a TF_ARGS
+
+# find acotado: auto_find <profundidad> <tests de find...>
+auto_find() {
+    timeout 20 find "$AUTO_BASE" -maxdepth "$1" "${AUTO_PRUNE[@]}" "${@:2}" -print 2>/dev/null
+}
+
+# Muestra una lista numerada y deja la elección en $PICKED
+pick_from_list() {
+    PICKED=""
+    local title="$1"; shift
+    local -a items=("$@")
+    if (( ${#items} == 0 )); then msg_warn "No se encontró nada."; return 1; fi
+    msg_info "$title"
+    local i=1 it num
+    for it in "${items[@]}"; do printf " %3d) %s\n" "$i" "$it"; i=$(( i + 1 )); done
+    prompt_input "Número (Enter = cancelar): " num
+    [[ -z "$num" ]] && return 1
+    if [[ "$num" == <-> ]] && (( num >= 1 && num <= ${#items} )); then
+        PICKED="${items[$num]}"; return 0
+    fi
+    msg_err "Selección no válida."; return 1
+}
+
+auto_set_base() {
+    local d
+    prompt_input "Carpeta base de búsqueda [actual: $AUTO_BASE]: " d
+    [[ -z "$d" ]] && return 0
+    if [[ ! -d "$d" ]]; then msg_err "No existe la carpeta '$d'."; return 0; fi
+    AUTO_BASE="${d:A}"
+    msg_ok "Carpeta base: $AUTO_BASE"
+    log_action "Automatización: base = $AUTO_BASE"
+}
+
+# ------------------------------------------------------------------------------
+#  Descubrimiento
+# ------------------------------------------------------------------------------
+ans_find_playbooks() {
+    local f
+    auto_find 5 -type f '(' -name '*.yml' -o -name '*.yaml' ')' | while IFS= read -r f; do
+        [[ "$f" == */roles/* || "$f" == */group_vars/* || "$f" == */host_vars/* || "$f" == */molecule/* ]] && continue
+        grep -qE '^[[:space:]]*-?[[:space:]]*hosts:' "$f" 2>/dev/null || continue
+        grep -qE '^[[:space:]]*-?[[:space:]]*(tasks|roles|pre_tasks|post_tasks|import_playbook):' "$f" 2>/dev/null \
+            && print -r -- "$f"
+    done | sort
+}
+
+ans_find_inventories() {
+    {
+        auto_find 5 -type f '(' -iname 'inventory*' -o -name hosts -o -name 'hosts.ini' -o -name 'hosts.yml' -o -name 'hosts.yaml' ')' \
+            | grep -vE '\.(md|txt|sh|py|j2)$'
+        [[ -f /etc/ansible/hosts ]] && print -r -- /etc/ansible/hosts
+    } | sort -u
+}
+
+tf_find_dirs() {
+    auto_find 5 -type f -name '*.tf' | grep -v '/modules/' | sed 's#/[^/]*$##' | sort -u
+}
+
+auto_overview() {
+    section "ENTORNO DE AUTOMATIZACIÓN"
+    kv "Carpeta base" "$AUTO_BASE"
+    local v
+    if command -v ansible &>/dev/null; then v=$(ansible --version 2>/dev/null | head -n1); else v="no instalado"; fi
+    kv "Ansible" "$v"
+    command -v ansible-lint &>/dev/null && kv "ansible-lint" "instalado" || kv "ansible-lint" "no instalado"
+    if command -v terraform &>/dev/null; then v=$(terraform version 2>/dev/null | head -n1); else v="no instalado"; fi
+    kv "Terraform" "$v"
+    if command -v tofu &>/dev/null; then v=$(tofu version 2>/dev/null | head -n1); else v="no instalado"; fi
+    kv "OpenTofu" "$v"
+    msg_info "Buscando proyectos (hasta 5 niveles bajo la base)..."
+    kv "Playbooks" "$(ans_find_playbooks | wc -l | tr -d ' ') encontrados"
+    kv "Inventarios" "$(ans_find_inventories | wc -l | tr -d ' ') encontrados"
+    kv "Proyectos TF" "$(tf_find_dirs | wc -l | tr -d ' ') carpetas con *.tf"
+    local nk rc
+    nk=$(ssh-add -l 2>/dev/null); rc=$?
+    case $rc in
+        0) kv "ssh-agent" "${C_GRN}[OK]${C_RST} $(print -r -- "$nk" | wc -l | tr -d ' ') clave(s) cargada(s)" ;;
+        1) kv "ssh-agent" "${C_YEL}[!]${C_RST} activo pero sin claves (ssh-add)" ;;
+        *) kv "ssh-agent" "${C_YEL}[!]${C_RST} sin agente (Ansible usará claves por defecto o -K)" ;;
+    esac
+}
+
+# ==============================================================================
+#  ANSIBLE
+# ==============================================================================
+ans_inv_info() {
+    local g hosts groups
+    g=$(ansible-inventory -i "$ANS_INV" --graph 2>/dev/null)
+    if [[ -z "$g" ]]; then ANS_INV_INFO="no se pudo leer: revisa la sintaxis"; return; fi
+    hosts=$(print -r -- "$g" | grep -E '\|--[^@]' | sed 's/.*|--//' | sort -u | wc -l | tr -d ' ')
+    groups=$(print -r -- "$g" | grep -c '@')
+    ANS_INV_INFO="$hosts hosts / $groups grupos"
+}
+
+ans_panel() {
+    print ""
+    kv "Versión" "${ANS_VER:-N/D}"
+    kv "Config" "${ANS_CFG:-ninguno}"
+    kv "Inventario" "${ANS_INV:-(sin seleccionar)}${ANS_INV:+  [$ANS_INV_INFO]}"
+    kv "Playbook" "${ANS_PLAY:-(sin seleccionar)}"
+    kv "Límite" "${ANS_LIMIT:-(todos los hosts)}"
+    local nk rc
+    nk=$(ssh-add -l 2>/dev/null); rc=$?
+    case $rc in
+        0) kv "ssh-agent" "${C_GRN}[OK]${C_RST} $(print -r -- "$nk" | wc -l | tr -d ' ') clave(s) cargada(s)" ;;
+        1) kv "ssh-agent" "${C_YEL}[!]${C_RST} activo pero sin claves" ;;
+        *) kv "ssh-agent" "${C_YEL}[!]${C_RST} sin agente" ;;
+    esac
+}
+
+# Ejecuta ansible-playbook desde la carpeta del playbook (ansible.cfg y roles/ del proyecto)
+ans_pb() { ( cd "${ANS_PLAY:h}" && ansible-playbook "$@" ); }
+
+ans_need_inv()  { [[ -n "$ANS_INV"  ]] && return 0; msg_warn "Primero selecciona un inventario."; return 1; }
+ans_need_play() { [[ -n "$ANS_PLAY" ]] && return 0; msg_warn "Primero selecciona un playbook.";  return 1; }
+
+# Argumentos comunes: inventario + límite
+ans_base_opts() {
+    ANS_ARGS=(-i "$ANS_INV")
+    [[ -n "$ANS_LIMIT" ]] && ANS_ARGS+=(--limit "$ANS_LIMIT")
+}
+
+ans_ask_become() {
+    if confirm "¿Elevar privilegios (become/sudo)?"; then
+        ANS_ARGS+=(-b)
+        confirm "¿Pedir contraseña de sudo (-K)?" && ANS_ARGS+=(-K)
+    fi
+}
+
+ans_select_inv() {
+    local -a found
+    found=( ${(f)"$(ans_find_inventories)"} )
+    found+=("[escribir ruta manualmente]")
+    pick_from_list "Inventarios encontrados bajo $AUTO_BASE:" "${found[@]}" || return 0
+    local choice="$PICKED"
+    if [[ "$choice" == "[escribir ruta manualmente]" ]]; then
+        prompt_input "Ruta del inventario (archivo o carpeta): " choice
+    fi
+    [[ -z "$choice" ]] && return 0
+    if [[ ! -e "$choice" ]]; then msg_err "No existe: $choice"; return 0; fi
+    ANS_INV="${choice:A}"; ANS_LIMIT=""
+    ans_inv_info
+    msg_ok "Inventario activo: $ANS_INV ($ANS_INV_INFO)"
+    log_action "Ansible: inventario $ANS_INV"
+}
+
+ans_select_play() {
+    local -a found
+    found=( ${(f)"$(ans_find_playbooks)"} )
+    found+=("[escribir ruta manualmente]")
+    pick_from_list "Playbooks encontrados bajo $AUTO_BASE:" "${found[@]}" || return 0
+    local choice="$PICKED"
+    if [[ "$choice" == "[escribir ruta manualmente]" ]]; then
+        prompt_input "Ruta del playbook: " choice
+    fi
+    [[ -z "$choice" ]] && return 0
+    if [[ ! -f "$choice" ]]; then msg_err "No existe: $choice"; return 0; fi
+    ANS_PLAY="${choice:A}"; ANS_CHECKED=""
+    msg_ok "Playbook activo: $ANS_PLAY"
+    log_action "Ansible: playbook $ANS_PLAY"
+}
+
+ans_set_limit() {
+    local l re='^[A-Za-z0-9_.:,!&*@-]+$'
+    prompt_input "Límite de hosts/grupos (ej: web,db o 'srv*'; Enter = quitar): " l
+    if [[ -z "$l" ]]; then ANS_LIMIT=""; msg_ok "Límite eliminado."; return 0; fi
+    if [[ "$l" =~ $re ]]; then ANS_LIMIT="$l"; msg_ok "Límite: $ANS_LIMIT"; else msg_err "Patrón no válido."; fi
+}
+
+ans_graph() {
+    ans_need_inv || return 0
+    ansible-inventory -i "$ANS_INV" --graph
+}
+
+ans_list_inv() {
+    ans_need_inv || return 0
+    ansible-inventory -i "$ANS_INV" --list | head -n 200
+    msg_info "(se muestran las primeras 200 líneas)"
+}
+
+ans_ping() {
+    ans_need_inv || return 0
+    ans_base_opts
+    msg_info "ansible all -m ping (timeout 10 s)..."
+    local out ok bad
+    out=$(ansible all "${ANS_ARGS[@]}" -m ping -T 10 2>&1)
+    print -r -- "$out"
+    ok=$(print -r -- "$out" | grep -c 'SUCCESS')
+    bad=$(print -r -- "$out" | grep -cE 'UNREACHABLE|FAILED')
+    print ""
+    print -r -- " Resumen: ${C_GRN}$ok OK${C_RST} / ${C_RED}$bad con problemas${C_RST}"
+    log_action "Ansible: ping ($ok ok, $bad fallos)"
+}
+
+ans_adhoc() {
+    ans_need_inv || return 0
+    local choice cmd svc
+    print " 1) uptime"
+    print " 2) df -hP (discos)"
+    print " 3) free -h (memoria)"
+    print " 4) Estado de un servicio (systemctl is-active)"
+    print " 5) Comando personalizado"
+    prompt_input "Elige [1-5]: " choice
+    case "$choice" in
+        1) cmd="uptime" ;;
+        2) cmd="df -hP" ;;
+        3) cmd="free -h" ;;
+        4) prompt_input "Nombre del servicio: " svc
+           valid_ident "$svc" || { msg_err "Nombre no válido."; return 0; }
+           cmd="systemctl is-active $svc" ;;
+        5) prompt_input "Comando (módulo 'command', sin pipes ni redirecciones): " cmd
+           [[ -z "$cmd" ]] && return 0
+           confirm "¿Ejecutar '$cmd' en todos los hosts del alcance?" || return 0 ;;
+        *) msg_warn "Opción no válida."; return 0 ;;
+    esac
+    ans_base_opts
+    ans_ask_become
+    ansible all "${ANS_ARGS[@]}" -m command -a "$cmd"
+    log_action "Ansible: ad-hoc '$cmd'"
+}
+
+ans_facts() {
+    ans_need_inv || return 0
+    ans_base_opts
+    msg_info "Distribución y versión de cada host:"
+    ansible all "${ANS_ARGS[@]}" -m setup -a 'filter=ansible_distribution*' -T 10 2>&1 \
+        | grep -E 'SUCCESS|UNREACHABLE|FAILED|"ansible_distribution(_version)?"'
+    log_action "Ansible: facts de distribución"
+}
+
+# Tags opcionales para playbooks
+ans_pb_opts() {
+    ans_base_opts
+    local tags re='^[A-Za-z0-9_,.-]+$'
+    prompt_input "Tags (separados por coma, Enter = todos): " tags
+    if [[ -n "$tags" ]]; then
+        [[ "$tags" =~ $re ]] && ANS_ARGS+=(--tags "$tags") || { msg_err "Tags no válidos."; return 1; }
+    fi
+    return 0
+}
+
+ans_syntax() {
+    ans_need_play || return 0
+    ans_base_opts
+    ans_pb "${ANS_ARGS[@]}" "$ANS_PLAY" --syntax-check \
+        && msg_ok "Sintaxis correcta." || msg_err "Se encontraron errores de sintaxis."
+    log_action "Ansible: syntax-check $ANS_PLAY"
+}
+
+ans_lint() {
+    ans_need_play || return 0
+    if ! command -v ansible-lint &>/dev/null; then
+        msg_warn "ansible-lint no está instalado."
+        need ansible-lint || { msg_info "Alternativa: pipx install ansible-lint"; return 0; }
+    fi
+    ansible-lint "$ANS_PLAY"
+    log_action "Ansible: lint $ANS_PLAY"
+}
+
+ans_tasks() {
+    ans_need_play || return 0
+    ans_base_opts
+    ans_pb "${ANS_ARGS[@]}" "$ANS_PLAY" --list-tasks --list-tags
+}
+
+ans_check() {
+    ans_need_inv || return 0
+    ans_need_play || return 0
+    ans_pb_opts || return 0
+    ans_ask_become
+    msg_info "Dry-run (--check --diff): no se aplican cambios."
+    ans_pb "${ANS_ARGS[@]}" "$ANS_PLAY" --check --diff
+    ANS_CHECKED="$ANS_PLAY"
+    log_action "Ansible: check $ANS_PLAY"
+}
+
+ans_run() {
+    ans_need_inv || return 0
+    ans_need_play || return 0
+    ans_pb_opts || return 0
+    ans_ask_become
+    msg_info "Hosts que se verán afectados:"
+    ans_pb "${ANS_ARGS[@]}" "$ANS_PLAY" --list-hosts
+    if [[ "$ANS_CHECKED" != "$ANS_PLAY" ]]; then
+        msg_warn "No has ejecutado --check con este playbook en esta sesión."
+    fi
+    confirm "¿EJECUTAR el playbook de verdad?" || { msg_info "Cancelado."; return 0; }
+    ans_pb "${ANS_ARGS[@]}" "$ANS_PLAY"
+    log_action "Ansible: RUN $ANS_PLAY (rc=$?)"
+}
+
+ans_galaxy() {
+    local req
+    [[ -n "$ANS_PLAY" && -f "${ANS_PLAY:h}/requirements.yml" ]] && req="${ANS_PLAY:h}/requirements.yml"
+    if [[ -n "$req" ]] && confirm "Se encontró $req. ¿Instalar dependencias?"; then
+        ansible-galaxy install -r "$req"
+        log_action "Ansible: galaxy install $req"
+    fi
+    msg_info "Collections instaladas:"
+    ansible-galaxy collection list 2>/dev/null | head -n 30
+    msg_info "Roles instalados:"
+    ansible-galaxy role list 2>/dev/null | head -n 30
+}
+
+ans_vault() {
+    local f choice
+    prompt_input "Archivo (vault): " f
+    [[ -f "$f" ]] || { msg_err "El archivo no existe."; return 0; }
+    print " 1) Ver (view)   2) Editar (edit)   3) Cifrar (encrypt)"
+    prompt_input "Elige [1-3]: " choice
+    case "$choice" in
+        1) ansible-vault view "$f" ;;
+        2) ansible-vault edit "$f" ;;
+        3) ansible-vault encrypt "$f" ;;
+        *) msg_warn "Opción no válida."; return 0 ;;
+    esac
+    log_action "Ansible: vault ($choice) en $f"
+}
+
+ans_config() {
+    msg_info "Configuración modificada respecto a los valores por defecto:"
+    ansible-config dump --only-changed
+}
+
+menu_ansible() {
+    if ! need ansible; then pause_screen; return 0; fi
+    ANS_VER=$(ansible --version 2>/dev/null | head -n1)
+    ANS_CFG=$(ansible --version 2>/dev/null | awk -F' = ' '/config file/{print $2; exit}')
+    MENU_HOOK=ans_panel
+    run_menu "ANSIBLE - CENTRO DE CONTROL" \
+        "#PROYECTO ACTIVO" \
+        "Seleccionar inventario (autodetección)|ans_select_inv" \
+        "Seleccionar playbook (autodetección)|ans_select_play" \
+        "Definir límite de hosts (--limit)|ans_set_limit" \
+        "#DIAGNÓSTICO DE HOSTS" \
+        "Ver inventario como árbol (--graph)|ans_graph" \
+        "Ver inventario completo (--list)|ans_list_inv" \
+        "Ping a todos los hosts (con resumen OK/fallos)|ans_ping" \
+        "Distro y versión de cada host (facts)|ans_facts" \
+        "Comando ad-hoc (uptime, df, free, servicio...)|ans_adhoc" \
+        "#PLAYBOOK (flujo seguro: sintaxis > lint > check > run)" \
+        "Validar sintaxis|ans_syntax" \
+        "Lint (ansible-lint)|ans_lint" \
+        "Listar tareas y tags|ans_tasks" \
+        "Dry-run (--check --diff)|ans_check" \
+        "EJECUTAR playbook (lista hosts y pide confirmación)|ans_run" \
+        "#MANTENIMIENTO" \
+        "Galaxy: dependencias, collections y roles|ans_galaxy" \
+        "Vault: ver / editar / cifrar|ans_vault" \
+        "Configuración activa (ansible-config)|ans_config"
+    MENU_HOOK=""
+}
+
+# ==============================================================================
+#  TERRAFORM / OPENTOFU
+# ==============================================================================
+tfx() { "$TF_BIN" -chdir="$TF_DIR" "$@"; }
+
+tf_need_dir() { [[ -n "$TF_DIR" && -d "$TF_DIR" ]] && return 0; msg_warn "Primero selecciona un proyecto."; return 1; }
+
+tf_need_init() {
+    [[ -d "$TF_DIR/.terraform" ]] && return 0
+    msg_warn "El proyecto no está inicializado."
+    confirm "¿Ejecutar '$TF_BIN init' ahora?" || return 1
+    tfx init
+}
+
+tf_var_args() {
+    TF_ARGS=()
+    [[ -n "$TF_VARFILE" ]] && TF_ARGS+=(-var-file="$TF_VARFILE")
+}
+
+tf_panel() {
+    print ""
+    kv "Binario" "${TF_VER:-N/D}"
+    kv "Proyecto" "${TF_DIR:-(sin seleccionar)}"
+    [[ -n "$TF_DIR" && -d "$TF_DIR" ]] || return 0
+
+    local -a tfs=("$TF_DIR"/*.tf(N))
+    kv "Archivos .tf" "${#tfs}"
+    if [[ -d "$TF_DIR/.terraform" ]]; then
+        kv "Init" "${C_GRN}[OK]${C_RST} inicializado"
+        local ws; ws=$(timeout 5 "$TF_BIN" -chdir="$TF_DIR" workspace show 2>/dev/null)
+        kv "Workspace" "${ws:-N/D}"
+        local sl rc
+        sl=$(TF_INPUT=0 timeout 5 "$TF_BIN" -chdir="$TF_DIR" state list 2>/dev/null < /dev/null); rc=$?
+        if (( rc == 0 )); then
+            if [[ -z "$sl" ]]; then kv "Estado" "vacío (nada desplegado)"
+            else kv "Estado" "$(print -r -- "$sl" | wc -l | tr -d ' ') recursos gestionados"; fi
+        else
+            kv "Estado" "no consultable ahora (¿backend remoto sin credenciales?)"
+        fi
+    else
+        kv "Init" "${C_YEL}[!]${C_RST} pendiente (ejecuta init)"
+    fi
+
+    local prov=""
+    if [[ -f "$TF_DIR/.terraform.lock.hcl" ]]; then
+        prov=$(grep -E '^provider "' "$TF_DIR/.terraform.lock.hcl" | sed -E 's#^provider "[^/]*/##; s#".*##' | tr '\n' ' ')
+        kv "Providers" "${prov:-ninguno}"
+    fi
+    # Servicios locales de los que dependen ciertos providers
+    if [[ "$prov" == *docker* ]]; then
+        if timeout 3 docker info &>/dev/null; then kv "Docker" "${C_GRN}[OK]${C_RST} daemon activo"
+        else kv "Docker" "${C_YEL}[!]${C_RST} daemon inactivo o sin permisos (provider docker)"; fi
+    fi
+    if [[ "$prov" == *libvirt* ]]; then
+        if systemctl is-active --quiet libvirtd 2>/dev/null || systemctl is-active --quiet virtqemud 2>/dev/null; then
+            kv "libvirt" "${C_GRN}[OK]${C_RST} servicio activo"
+        else
+            kv "libvirt" "${C_YEL}[!]${C_RST} servicio inactivo (provider libvirt)"
+        fi
+    fi
+    if [[ -f "$TF_DIR/$TF_PLAN" ]]; then
+        kv "Plan guardado" "${C_YEL}sí${C_RST} ($(stat -c %y "$TF_DIR/$TF_PLAN" 2>/dev/null | cut -c1-16)) listo para apply"
+    else
+        kv "Plan guardado" "no"
+    fi
+    [[ -n "$TF_VARFILE" ]] && kv "Var-file" "${TF_VARFILE:t}"
+    return 0
+}
+
+tf_select_dir() {
+    local -a found
+    found=( ${(f)"$(tf_find_dirs)"} )
+    found+=("[escribir ruta manualmente]")
+    pick_from_list "Proyectos Terraform bajo $AUTO_BASE (se omiten carpetas modules/):" "${found[@]}" || return 0
+    local choice="$PICKED"
+    if [[ "$choice" == "[escribir ruta manualmente]" ]]; then
+        prompt_input "Ruta de la carpeta del proyecto: " choice
+    fi
+    [[ -z "$choice" ]] && return 0
+    if [[ ! -d "$choice" ]]; then msg_err "No existe la carpeta: $choice"; return 0; fi
+    TF_DIR="${choice:A}"; TF_VARFILE=""
+    msg_ok "Proyecto activo: $TF_DIR"
+    log_action "Terraform: proyecto $TF_DIR"
+}
+
+tf_select_varfile() {
+    tf_need_dir || return 0
+    local -a vf
+    vf=( ${(f)"$(find "$TF_DIR" -maxdepth 1 -type f '(' -name '*.tfvars' -o -name '*.tfvars.json' ')' 2>/dev/null | sort)"} )
+    vf+=("(ninguno)")
+    pick_from_list "Archivos de variables en $TF_DIR:" "${vf[@]}" || return 0
+    if [[ "$PICKED" == "(ninguno)" ]]; then TF_VARFILE=""; msg_ok "Sin var-file."
+    else TF_VARFILE="$PICKED"; msg_ok "Var-file: $TF_VARFILE"; fi
+}
+
+tf_init() {
+    tf_need_dir || return 0
+    local -a extra=()
+    confirm "¿Incluir -upgrade (actualiza providers)?" && extra=(-upgrade)
+    tfx init "${extra[@]}"
+    log_action "Terraform: init en $TF_DIR"
+}
+
+tf_validate() {
+    tf_need_dir || return 0
+    tf_need_init || return 0
+    tfx validate
+}
+
+tf_fmt() {
+    tf_need_dir || return 0
+    msg_info "Archivos que no cumplen el formato canónico:"
+    tfx fmt -check -diff -recursive
+    local rc=$?
+    if (( rc == 3 )); then
+        confirm "¿Aplicar 'fmt -recursive' para corregirlos?" && tfx fmt -recursive
+    elif (( rc == 0 )); then
+        msg_ok "Todo el código ya está formateado."
+    fi
+}
+
+tf_plan() {
+    tf_need_dir || return 0
+    tf_need_init || return 0
+    tf_var_args
+    msg_info "$TF_BIN plan -out=$TF_PLAN"
+    tfx plan -out="$TF_PLAN" "${TF_ARGS[@]}"
+    local rc=$?
+    (( rc == 0 )) && chmod 600 "$TF_DIR/$TF_PLAN" 2>/dev/null
+    (( rc == 0 )) && msg_ok "Plan guardado. Revísalo y luego usa 'apply'."
+    log_action "Terraform: plan en $TF_DIR (rc=$rc)"
+}
+
+tf_show_plan() {
+    tf_need_dir || return 0
+    [[ -f "$TF_DIR/$TF_PLAN" ]] || { msg_warn "No hay plan guardado."; return 0; }
+    tfx show -no-color "$TF_PLAN" | ${PAGER:-less}
+}
+
+tf_drift() {
+    tf_need_dir || return 0
+    tf_need_init || return 0
+    tf_var_args
+    msg_info "Buscando diferencias entre el código y la infraestructura real..."
+    local out rc
+    out=$(tfx plan -detailed-exitcode -input=false -lock=false -no-color "${TF_ARGS[@]}" 2>&1); rc=$?
+    print -r -- "$out" | tail -n 30
+    print ""
+    case $rc in
+        0) msg_ok "Sin cambios: la infraestructura coincide con el código." ;;
+        2) msg_warn "Hay diferencias (cambios pendientes o drift)." ;;
+        *) msg_err "El plan falló (revisa credenciales/backend/variables)." ;;
+    esac
+    log_action "Terraform: drift en $TF_DIR (rc=$rc)"
+}
+
+tf_apply() {
+    tf_need_dir || return 0
+    if [[ ! -f "$TF_DIR/$TF_PLAN" ]]; then
+        msg_warn "No hay plan guardado. 'apply' solo se permite desde un plan revisado: ejecuta 'plan' primero."
+        return 0
+    fi
+    msg_info "Plan guardado el $(stat -c %y "$TF_DIR/$TF_PLAN" 2>/dev/null | cut -c1-16). Resumen:"
+    tfx show -no-color "$TF_PLAN" | tail -n 25
+    local ws ans
+    ws=$(tfx workspace show 2>/dev/null)
+    print ""
+    msg_warn "Se aplicarán cambios REALES (workspace '${ws:-default}')."
+    prompt_input "Escribe el nombre del proyecto (${TF_DIR:t}) para confirmar: " ans
+    [[ "$ans" == "${TF_DIR:t}" ]] || { msg_info "Cancelado."; return 0; }
+    tfx apply "$TF_PLAN"
+    local rc=$?
+    (( rc == 0 )) && rm -f "$TF_DIR/$TF_PLAN"
+    log_action "Terraform: APPLY en $TF_DIR (rc=$rc)"
+}
+
+tf_destroy() {
+    tf_need_dir || return 0
+    tf_need_init || return 0
+    tf_var_args
+    msg_info "Generando plan de destrucción (aún no se destruye nada)..."
+    tfx plan -destroy -out="$TF_PLAN" "${TF_ARGS[@]}" || return 0
+    chmod 600 "$TF_DIR/$TF_PLAN" 2>/dev/null
+    local ws ans
+    ws=$(tfx workspace show 2>/dev/null)
+    print ""
+    msg_warn "PELIGRO: esto ELIMINARÁ la infraestructura del workspace '${ws:-default}'."
+    prompt_input "Escribe exactamente 'DESTRUIR ${TF_DIR:t}' para continuar: " ans
+    if [[ "$ans" != "DESTRUIR ${TF_DIR:t}" ]]; then
+        rm -f "$TF_DIR/$TF_PLAN"; msg_info "Cancelado. Plan de destrucción descartado."; return 0
+    fi
+    tfx apply "$TF_PLAN"
+    local rc=$?
+    rm -f "$TF_DIR/$TF_PLAN"
+    log_action "Terraform: DESTROY en $TF_DIR (rc=$rc)"
+}
+
+tf_state_list() { tf_need_dir || return 0; tf_need_init || return 0; tfx state list; }
+
+tf_state_show() {
+    tf_need_dir || return 0
+    tf_need_init || return 0
+    local -a res
+    res=( ${(f)"$(tfx state list 2>/dev/null)"} )
+    pick_from_list "Recursos en el estado:" "${res[@]}" || return 0
+    tfx state show "$PICKED"
+}
+
+tf_output()    { tf_need_dir || return 0; tf_need_init || return 0; tfx output; }
+tf_providers() { tf_need_dir || return 0; tf_need_init || return 0; tfx providers; }
+
+tf_workspace() {
+    tf_need_dir || return 0
+    tf_need_init || return 0
+    msg_info "Workspaces:"
+    tfx workspace list
+    local act name
+    print " 1) Cambiar a un workspace existente   2) Crear uno nuevo"
+    prompt_input "Elige [1-2, Enter = nada]: " act
+    [[ -z "$act" ]] && return 0
+    prompt_input "Nombre del workspace: " name
+    valid_ident "$name" || { msg_err "Nombre no válido."; return 0; }
+    case "$act" in
+        1) tfx workspace select "$name" ;;
+        2) tfx workspace new "$name" ;;
+        *) msg_warn "Opción no válida."; return 0 ;;
+    esac
+    log_action "Terraform: workspace $act $name en $TF_DIR"
+}
+
+menu_terraform() {
+    TF_BIN=""
+    if   command -v terraform &>/dev/null; then TF_BIN=terraform
+    elif command -v tofu      &>/dev/null; then TF_BIN=tofu
+    else
+        need terraform
+        msg_info "Alternativa libre y compatible: OpenTofu (https://opentofu.org/docs/intro/install/)"
+        pause_screen; return 0
+    fi
+    TF_VER=$("$TF_BIN" version 2>/dev/null | head -n1)
+    MENU_HOOK=tf_panel
+    run_menu "TERRAFORM / OPENTOFU - CENTRO DE CONTROL" \
+        "#PROYECTO ACTIVO" \
+        "Seleccionar proyecto (autodetección de carpetas *.tf)|tf_select_dir" \
+        "Seleccionar archivo de variables (var-file)|tf_select_varfile" \
+        "#PREPARAR Y VALIDAR" \
+        "init (opcional -upgrade)|tf_init" \
+        "validate|tf_validate" \
+        "fmt (revisar y corregir formato)|tf_fmt" \
+        "#CAMBIOS (flujo seguro: plan > revisar > apply)" \
+        "plan (guarda plan en $TF_PLAN)|tf_plan" \
+        "Ver el plan guardado|tf_show_plan" \
+        "Detectar drift (plan -detailed-exitcode)|tf_drift" \
+        "APPLY del plan guardado (pide escribir el nombre del proyecto)|tf_apply" \
+        "DESTROY (plan previo + confirmación reforzada)|tf_destroy" \
+        "#ESTADO" \
+        "Listar recursos (state list)|tf_state_list" \
+        "Ver un recurso (state show)|tf_state_show" \
+        "Outputs|tf_output" \
+        "Providers|tf_providers" \
+        "Workspaces: listar / cambiar / crear|tf_workspace"
+    MENU_HOOK=""
+}
+
+auto_panel() { print ""; kv "Carpeta base" "$AUTO_BASE"; }
 
 menu_automation() {
+    MENU_HOOK=auto_panel
     run_menu "HERRAMIENTAS DE AUTOMATIZACIÓN" \
-        "Ansible status|aut_ansible" \
-        "Terraform status|aut_terraform"
+        "Ansible: inventarios, playbooks, ad-hoc, vault|menu_ansible|nopause" \
+        "Terraform / OpenTofu: init, plan, apply seguro, drift|menu_terraform|nopause" \
+        "Estado del entorno (versiones, proyectos detectados, ssh-agent)|auto_overview" \
+        "Cambiar carpeta base de búsqueda|auto_set_base"
+    MENU_HOOK=""
 }
 
 # ==============================================================================
@@ -1464,12 +2154,180 @@ db_pg() {
     log_action "BBDD: consulta PostgreSQL"
 }
 
+# --- Ejecución de SQL (archivos y consultas) con guardarraíles ----------------
+# Conexión en variables globales SQL_*; la clave se borra al salir de la sesión.
+typeset -a SQL_CMD SQL_EXTRA
+SQL_BIN=""; SQL_HOST=""; SQL_USER=""; SQL_PASS=""; SQL_DB=""; SQL_LABEL=""; SQL_TX=0
+
+_sql_q_mssql() {
+    local -a dbarg=(); [[ -n "$SQL_DB" ]] && dbarg=(-d "$SQL_DB")
+    SQLCMDPASSWORD="$SQL_PASS" "$SQL_BIN" -S "$SQL_HOST" -U "$SQL_USER" "${SQL_EXTRA[@]}" "${dbarg[@]}" \
+        -l 5 -b -W -s '|' -Q "SET NOCOUNT ON; $1" 2>&1
+}
+_sql_f_mssql() {
+    local -a dbarg=(); [[ -n "$SQL_DB" ]] && dbarg=(-d "$SQL_DB")
+    SQLCMDPASSWORD="$SQL_PASS" "$SQL_BIN" -S "$SQL_HOST" -U "$SQL_USER" "${SQL_EXTRA[@]}" "${dbarg[@]}" \
+        -l 5 -b -i "$1" 2>&1
+}
+_sql_q_mysql() {
+    local -a d=(); [[ -n "$SQL_DB" ]] && d=("$SQL_DB")
+    MYSQL_PWD="$SQL_PASS" "${SQL_CMD[@]}" -t "${d[@]}" -e "$1" 2>&1
+}
+_sql_f_mysql() {   # redirección por stdin: sirve aunque el cliente corra vía sudo
+    local -a d=(); [[ -n "$SQL_DB" ]] && d=("$SQL_DB")
+    MYSQL_PWD="$SQL_PASS" "${SQL_CMD[@]}" "${d[@]}" < "$1" 2>&1
+}
+_sql_q_pg() {
+    PGPASSWORD="$SQL_PASS" "${SQL_CMD[@]}" -v ON_ERROR_STOP=1 -c "$1" 2>&1
+}
+_sql_f_pg() {      # stdin: el usuario 'postgres' no puede leer archivos de tu /home
+    local -a tx=(); (( SQL_TX )) && tx=(-1)
+    PGPASSWORD="$SQL_PASS" "${SQL_CMD[@]}" -v ON_ERROR_STOP=1 "${tx[@]}" -f - < "$1" 2>&1
+}
+
+# Pide confirmación si el SQL modifica datos/estructura. Retorna 0 = continuar.
+sql_guard() {
+    local q="$1" typed
+    local re_mod='(^|[^[:alnum:]_])(drop|delete|update|truncate|alter|insert|create|grant|revoke|merge|exec|execute|shutdown|xp_cmdshell)([^[:alnum:]_]|$)'
+    local re_dml='(^|[^[:alnum:]_])(delete|update)([^[:alnum:]_]|$)'
+    local re_whr='(^|[^[:alnum:]_])where([^[:alnum:]_]|$)'
+    print -r -- "$q" | grep -qiE "$re_mod" || return 0
+
+    msg_warn "Se detectaron sentencias que MODIFICAN datos o estructura."
+    if print -r -- "$q" | grep -qiE "$re_dml" && ! print -r -- "$q" | grep -qiE "$re_whr"; then
+        msg_warn "DELETE/UPDATE SIN cláusula WHERE: afectaría TODAS las filas."
+        prompt_input "Escribe CONFIRMAR para continuar: " typed
+        [[ "$typed" == CONFIRMAR ]]
+        return $?
+    fi
+    confirm "¿Ejecutar de todos modos?"
+}
+
+# Menú de la sesión SQL:  sql_loop mssql|mysql|pg
+sql_loop() {
+    local eng="$1" mode f q n
+    while true; do
+        print ""
+        print " 1) Ejecutar archivo .sql"
+        print " 2) Ejecutar consulta rápida"
+        print " q) Volver al menú de BBDD   [conectado a: $SQL_LABEL]"
+        prompt_input "Selecciona modo [1-2 o q]: " mode || break
+        case "$mode" in
+            1)
+                prompt_input "Ruta del archivo .sql: " f
+                [[ -z "$f" ]] && continue
+                [[ -f "$f" && -r "$f" ]] || { msg_err "El archivo no existe o no es legible."; continue; }
+                n=$(wc -l < "$f" | tr -d ' ')
+                sql_guard "$(cat -- "$f")" || { msg_info "Cancelado."; continue; }
+                confirm "¿Ejecutar '${f:t}' ($n líneas) en $SQL_LABEL?" || { msg_info "Cancelado."; continue; }
+                SQL_TX=0
+                if [[ "$eng" == pg ]] && confirm "¿En una sola transacción (rollback si algo falla)?"; then SQL_TX=1; fi
+                msg_info "Ejecutando '${f:t}'..."
+                "_sql_f_$eng" "$f"
+                log_action "BBDD($eng): archivo ${f:t} en $SQL_LABEL (rc=$?)"
+                ;;
+            2)
+                prompt_input "Consulta SQL: " q
+                [[ -z "$q" ]] && { msg_warn "Consulta vacía."; continue; }
+                sql_guard "$q" || { msg_info "Cancelado."; continue; }
+                "_sql_q_$eng" "$q"
+                log_action "BBDD($eng): consulta rápida en $SQL_LABEL (rc=$?)"
+                ;;
+            q|Q|"") break ;;
+            *) msg_warn "Modo no válido." ;;
+        esac
+    done
+}
+
+db_mssql_exec() {
+    local bin host user pass dbn out rc
+    if ! bin=$(find_sqlcmd); then msg_warn "'sqlcmd' no está instalado."; install_hint sqlcmd; return 0; fi
+    SQL_EXTRA=()
+    "$bin" '-?' 2>&1 | grep -qE 'Version (1[7-9]|[2-9][0-9])' && SQL_EXTRA=(-C)
+
+    prompt_input "Servidor [Default: localhost]: " host;  host="${host:-localhost}"
+    prompt_input "Usuario [Default: sa]: " user;          user="${user:-sa}"
+    prompt_password "Contraseña: " pass
+    prompt_input "Base de datos [Enter = la predeterminada del login]: " dbn
+    [[ -z "$pass" ]] && { msg_err "SQL Server requiere contraseña."; return 0; }
+    valid_host "$host" || { msg_err "Servidor no válido."; return 0; }
+    [[ -n "$dbn" ]] && ! valid_ident "$dbn" && { msg_err "Nombre de base no válido."; return 0; }
+
+    SQL_BIN="$bin"; SQL_HOST="$host"; SQL_USER="$user"; SQL_PASS="$pass"; SQL_DB="$dbn"
+    SQL_LABEL="$host${dbn:+/$dbn}"
+    out=$(_sql_q_mssql "SELECT 1 AS ok"); rc=$?
+    if (( rc != 0 )) || [[ "$out" == *"Sqlcmd: Error"* || "$out" == *"Msg "* ]]; then
+        msg_err "No se pudo conectar a SQL Server."
+        print -r -- "$out" | head -n 3 | sed 's/^/        /'
+        log_action "BBDD(mssql): fallo de conexión en $SQL_LABEL"
+        SQL_PASS=""; return 0
+    fi
+    msg_ok "Conectado a $SQL_LABEL"
+    sql_loop mssql
+    SQL_PASS=""
+}
+
+db_mysql_exec() {
+    need mysql || return 0
+    local user pass dbn out rc
+    prompt_input "Usuario [Default: root]: " user; user="${user:-root}"
+    prompt_password "Contraseña (vacía = auth por socket con sudo): " pass
+    prompt_input "Base de datos [Enter = ninguna]: " dbn
+    valid_ident "$user" || { msg_err "Usuario no válido."; return 0; }
+    [[ -n "$dbn" ]] && ! valid_ident "$dbn" && { msg_err "Nombre de base no válido."; return 0; }
+
+    SQL_CMD=(mysql -u "$user")
+    [[ -z "$pass" ]] && SQL_CMD=("${SUDO[@]}" "${SQL_CMD[@]}")
+    SQL_PASS="$pass"; SQL_DB="$dbn"; SQL_LABEL="mysql:$user${dbn:+/$dbn}"
+    out=$(_sql_q_mysql "SELECT 1 AS ok"); rc=$?
+    if (( rc != 0 )); then
+        msg_err "No se pudo conectar a MySQL/MariaDB."
+        print -r -- "$out" | head -n 3 | sed 's/^/        /'
+        log_action "BBDD(mysql): fallo de conexión ($SQL_LABEL)"
+        SQL_PASS=""; return 0
+    fi
+    msg_ok "Conectado a $SQL_LABEL"
+    sql_loop mysql
+    SQL_PASS=""
+}
+
+db_pg_exec() {
+    need psql || return 0
+    local user dbname pass out rc
+    prompt_input "Usuario [Default: postgres]: " user;        user="${user:-postgres}"
+    prompt_input "Base de datos [Default: postgres]: " dbname; dbname="${dbname:-postgres}"
+    prompt_password "Contraseña (vacía = auth local 'peer' como ese usuario): " pass
+    valid_ident "$user" && valid_ident "$dbname" || { msg_err "Usuario o base no válidos."; return 0; }
+
+    if [[ -n "$pass" ]]; then   SQL_CMD=(psql -h localhost -U "$user" -d "$dbname")
+    elif (( EUID == 0 )); then  SQL_CMD=(runuser -u "$user" -- psql -d "$dbname")
+    else                        SQL_CMD=(sudo -u "$user" psql -d "$dbname")
+    fi
+    SQL_PASS="$pass"; SQL_LABEL="pg:$user/$dbname"
+    out=$(_sql_q_pg "SELECT 1 AS ok"); rc=$?
+    if (( rc != 0 )); then
+        msg_err "No se pudo conectar a PostgreSQL."
+        print -r -- "$out" | head -n 3 | sed 's/^/        /'
+        log_action "BBDD(pg): fallo de conexión ($SQL_LABEL)"
+        SQL_PASS=""; return 0
+    fi
+    msg_ok "Conectado a $SQL_LABEL"
+    sql_loop pg
+    SQL_PASS=""
+}
+
 menu_db() {
     run_menu "GESTIÓN DE BASES DE DATOS (BBDD)" \
         "Detectar motores instalados|db_detect" \
-        "Conectar a SQL Server (mssql) y listar BBDD|db_mssql" \
-        "Conectar a MySQL/MariaDB y listar BBDD|db_mysql" \
-        "Conectar a PostgreSQL y listar BBDD|db_pg"
+        "#SQL SERVER (MSSQL)" \
+        "Listar BBDD|db_mssql" \
+        "Ejecutar script .sql / consulta|db_mssql_exec|nopause" \
+        "#MYSQL / MARIADB" \
+        "Listar BBDD|db_mysql" \
+        "Ejecutar script .sql / consulta|db_mysql_exec|nopause" \
+        "#POSTGRESQL" \
+        "Listar BBDD|db_pg" \
+        "Ejecutar script .sql / consulta|db_pg_exec|nopause"
 }
 
 # ==============================================================================
