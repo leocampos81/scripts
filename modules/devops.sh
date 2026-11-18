@@ -15,7 +15,7 @@ sys_update_system() {
     log_action "Sistema: actualización con $PKG_MGR"
 }
 
-# --- GIT MULTI-REMOTO (Rediseñado) ---
+# --- GIT MULTI-REMOTO ---
 git_ok() {
     command -v git &>/dev/null || { need git || return 1; }
     if ! git -C "$REPO_DIR" rev-parse --is-inside-work-tree &>/dev/null; then
@@ -24,7 +24,29 @@ git_ok() {
     fi
 }
 
-# Función interna para hacer el push/pull según el menú
+# Validación previa de conexión SSH
+check_remote_auth() {
+    local rem="$1"
+    local url
+    url=$(git -C "$REPO_DIR" remote get-url "$rem" 2>/dev/null)
+    
+    if [[ "$url" == git@* ]]; then
+        local host="${${url#git@}%%:*}"
+        if timeout 3 ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T "git@$host" >/dev/null 2>&1; then
+            return 0
+        else
+            local out
+            out=$(timeout 3 ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T "git@$host" 2>&1)
+            if [[ "$out" == *"successfully authenticated"* || "$out" == *"Welcome to GitLab"* || "$out" == *"Hi "* ]]; then
+                return 0
+            else
+                return 1
+            fi
+        fi
+    fi
+    return 0
+}
+
 git_action_push() {
     local rem="$1"
     if [[ "$rem" == "BOTH" ]]; then
@@ -40,9 +62,7 @@ git_action_push() {
 
 git_action_pull() {
     local rem="$1"
-    if [[ "$rem" == "BOTH" ]]; then
-        rem="origin" # El pull siempre se hace desde el principal para evitar conflictos
-    fi
+    if [[ "$rem" == "BOTH" ]]; then rem="origin"; fi
     msg_info "Descargando desde '$rem'..."
     if ! git -C "$REPO_DIR" pull "$rem" --ff-only 2>/dev/null; then
         git -C "$REPO_DIR" pull "$rem" --no-rebase
@@ -116,7 +136,6 @@ menu_git_both() {
                 print "=========================================================="
                 print ""
                 
-                # Obtenemos el estado de cada remoto
                 local -a remotes
                 remotes=(${(f)"$(git -C "$REPO_DIR" remote)"})
                 
@@ -127,12 +146,10 @@ menu_git_both() {
                     if [[ "$url" == *"github.com"* ]]; then label="GITHUB ($r)"; color="$C_CYN"
                     elif [[ "$url" == *"gitlab.com"* ]]; then label="GITLAB ($r)"; color="$C_ORG"; fi
                     
-                    # Comprobar si el remoto está rastreado
                     local remote_branch=$(git -C "$REPO_DIR" rev-parse --abbrev-ref "${r}/${branch}" 2>/dev/null)
                     
                     print -r -- "${color}--- $label ---${C_RST}"
                     if [[ -n "$remote_branch" ]]; then
-                        # Ver diferencia entre local y remoto
                         local ahead behind
                         ahead=$(git -C "$REPO_DIR" rev-list --count "${r}/${branch}..HEAD" 2>/dev/null)
                         behind=$(git -C "$REPO_DIR" rev-list --count "HEAD..${r}/${branch}" 2>/dev/null)
@@ -150,7 +167,6 @@ menu_git_both() {
                     print ""
                 done
                 
-                # Mostrar si hay archivos sin commitear
                 if [[ -n "$(git -C "$REPO_DIR" status -s)" ]]; then
                     print -r -- "${C_YEL}--- ARCHIVOS LOCALES MODIFICADOS ---${C_RST}"
                     git -C "$REPO_DIR" status -s
@@ -191,27 +207,36 @@ menu_git() {
         print " ¿Con qué repositorio quieres trabajar hoy?"
         print ""
         
-        # Autodetección de remotos y armado del menú
         local -a remotes
         remotes=(${(f)"$(git -C "$REPO_DIR" remote)"})
         local -A rmap
-        local i=1 r url label color
+        local i=1 r url label color auth_status
         
         for r in "${remotes[@]}"; do
             url=$(git -C "$REPO_DIR" remote get-url "$r" 2>/dev/null)
-            label="$r"
-            color="$C_RST"
+            label="$r"; color="$C_RST"
             if [[ "$url" == *"github.com"* ]]; then label="$r (GitHub)"; color="$C_CYN"
             elif [[ "$url" == *"gitlab.com"* ]]; then label="$r (GitLab)"; color="$C_ORG"; fi
             
-            # Usamos print en lugar de printf para evitar el error "bad option: -"
-            print " $i) ${color}${label}${C_RST}"
+            if check_remote_auth "$r"; then
+                auth_status="${C_GRN}[OK]${C_RST}"
+            else
+                auth_status="${C_RED}[FALLO AUTH]${C_RST}"
+            fi
+            
+            print " $i) ${color}${label}${C_RST}  $auth_status"
             rmap[$i]="$r|$label|$color"
             i=$(( i + 1 ))
         done
         
         if (( ${#remotes} > 1 )); then
-            print " $i) ${C_YEL}AMBOS (Sincronizar con todos)${C_RST}"
+            local both_ok=1
+            for r in "${remotes[@]}"; do
+                check_remote_auth "$r" || both_ok=0
+            done
+            if (( both_ok )); then auth_status="${C_GRN}[OK]${C_RST}"; else auth_status="${C_RED}[FALLO AUTH]${C_RST}"; fi
+            
+            print " $i) ${C_YEL}AMBOS (Sincronizar con todos)${C_RST}  $auth_status"
             rmap[$i]="BOTH|Ambos Remotos|$C_YEL"
         fi
         
@@ -306,26 +331,71 @@ menu_automation() {
 }
 
 # --- DOCKER ---
-dk_list_names() { "${DOCKER[@]}" ps -a --format '  > {{.Names}} ({{.Status}})' 2>/dev/null; }
+dk_get_container() {
+    local -a containers
+    containers=(${(f)"$("${DOCKER[@]}" ps -a --format '{{.Names}}' 2>/dev/null)"})
+    
+    if (( ${#containers} == 0 )); then
+        msg_warn "No hay contenedores disponibles."
+        return 1
+    fi
+
+    local i=1 c
+    for c in "${containers[@]}"; do
+        printf " %2d) %s\n" "$i" "$c"
+        i=$(( i + 1 ))
+    done
+
+    local choice
+    prompt_input "Selecciona el número del contenedor (o 'q' para cancelar): " choice
+    [[ -z "$choice" || "$choice" == "q" ]] && return 1
+
+    if [[ "$choice" == <-> ]] && (( choice >= 1 && choice <= ${#containers} )); then
+        echo "${containers[$choice]}"
+        return 0
+    else
+        msg_err "Selección no válida."
+        return 1
+    fi
+}
+
 dk_ps() { "${DOCKER[@]}" ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null; }
 dk_stats() { "${DOCKER[@]}" stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" 2>/dev/null; }
+
 dk_logs() {
-    dk_list_names
-    local n; prompt_input "Nombre del contenedor: " n
-    [[ -z "$n" ]] && return 0
-    run_interruptible "${DOCKER[@]}" logs -f --tail 50 "$n"
+    clear
+    print "--- CONTENEDORES DISPONIBLES ---"
+    local cnt
+    cnt=$(dk_get_container) || return 0
+    
+    msg_info "Mostrando logs de '$cnt' (Ctrl+C para volver al menú)..."
+    sleep 1
+    ( trap - INT; "${DOCKER[@]}" logs -f --tail 50 "$cnt" )
 }
+
 dk_ctl() {
-    dk_list_names
-    local n a; prompt_input "Nombre del contenedor: " n; prompt_input "1) Restart 2) Stop 3) Start: " a
+    clear
+    print "--- CONTENEDORES DISPONIBLES ---"
+    local cnt
+    cnt=$(dk_get_container) || return 0
+    
+    print ""
+    print " ¿Qué deseas hacer con '$cnt'?"
+    print " 1) Reiniciar (restart)"
+    print " 2) Detener (stop)"
+    print " 3) Iniciar (start)"
+    local a; prompt_input "Acción [1-3]: " a
+    
     case "$a" in
-        1) sudo docker restart "$n" ;;
-        2) sudo docker stop "$n" ;;
-        3) sudo docker start "$n" ;;
+        1) sudo docker restart "$cnt" && msg_ok "Contenedor reiniciado." ;;
+        2) sudo docker stop "$cnt" && msg_ok "Contenedor detenido." ;;
+        3) sudo docker start "$cnt" && msg_ok "Contenedor iniciado." ;;
+        *) msg_warn "Acción no válida." ;;
     esac
 }
+
 dk_prune() {
-    confirm "¿Ejecutar docker system prune -f?" || return 0
+    confirm "¿Ejecutar 'docker system prune -f'?" || return 0
     sudo docker system prune -f
 }
 
