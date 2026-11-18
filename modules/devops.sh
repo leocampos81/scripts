@@ -99,7 +99,7 @@ menu_git_both() {
         print "=========================================================="
         print -r -- "  ${C_YEL}GIT: AMBOS REMOTOS (Sincronización Total)${C_RST}"
         print "=========================================================="
-        print " 1) Ver estado del repositorio"
+        print " 1) Ver estado detallado (Local vs GitHub vs GitLab)"
         print " 2) Ver últimos commits"
         print " 3) Descargar cambios (Pull desde 'origin')"
         print " 4) Subir cambios a TODOS (Push a todos los remotos)"
@@ -109,8 +109,57 @@ menu_git_both() {
         local opt; prompt_input "Elige una opción [1-4 o q]: " opt
         case "$opt" in
             1) 
-                msg_info "Rama actual: $(git -C "$REPO_DIR" branch --show-current)"
-                git -C "$REPO_DIR" status -sb
+                clear
+                local branch=$(git -C "$REPO_DIR" branch --show-current)
+                print "=========================================================="
+                print -r -- "  ESTADO DE SINCRONIZACIÓN (Rama: $branch)"
+                print "=========================================================="
+                print ""
+                
+                # Obtenemos el estado de cada remoto
+                local -a remotes
+                remotes=(${(f)"$(git -C "$REPO_DIR" remote)"})
+                
+                for r in "${remotes[@]}"; do
+                    local url label color
+                    url=$(git -C "$REPO_DIR" remote get-url "$r" 2>/dev/null)
+                    label="$r"; color="$C_RST"
+                    if [[ "$url" == *"github.com"* ]]; then label="GITHUB ($r)"; color="$C_CYN"
+                    elif [[ "$url" == *"gitlab.com"* ]]; then label="GITLAB ($r)"; color="$C_ORG"; fi
+                    
+                    # Comprobar si el remoto está rastreado
+                    local remote_branch=$(git -C "$REPO_DIR" rev-parse --abbrev-ref "${r}/${branch}" 2>/dev/null)
+                    
+                    print -r -- "${color}--- $label ---${C_RST}"
+                    if [[ -n "$remote_branch" ]]; then
+                        # Ver diferencia entre local y remoto
+                        local ahead behind
+                        ahead=$(git -C "$REPO_DIR" rev-list --count "${r}/${branch}..HEAD" 2>/dev/null)
+                        behind=$(git -C "$REPO_DIR" rev-list --count "HEAD..${r}/${branch}" 2>/dev/null)
+                        
+                        print " Rama remota: ${r}/${branch}"
+                        if (( ahead == 0 && behind == 0 )); then
+                            print " Estado: ${C_GRN}✓ Sincronizado${C_RST} (Sin cambios pendientes)"
+                        else
+                            [[ "$ahead" -gt 0 ]] && print " Estado: ${C_YEL}↑ $ahead commit(s) local(es) para subir${C_RST}"
+                            [[ "$behind" -gt 0 ]] && print " Estado: ${C_RED}↓ $behind commit(s) remoto(s) para bajar${C_RST}"
+                        fi
+                    else
+                        print " Estado: ${C_YEL}⚠ La rama '$branch' no existe en este remoto${C_RST}"
+                    fi
+                    print ""
+                done
+                
+                # Mostrar si hay archivos sin commitear
+                if [[ -n "$(git -C "$REPO_DIR" status -s)" ]]; then
+                    print -r -- "${C_YEL}--- ARCHIVOS LOCALES MODIFICADOS ---${C_RST}"
+                    git -C "$REPO_DIR" status -s
+                    print ""
+                else
+                    print " (No hay archivos locales modificados)"
+                    print ""
+                fi
+                
                 pause_screen ;;
             2) 
                 git -C "$REPO_DIR" log --oneline --decorate -n 5
