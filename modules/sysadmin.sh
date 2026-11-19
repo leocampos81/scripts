@@ -205,6 +205,82 @@ act_systemctl() {
     esac
 }
 
+# --- Diagnóstico de Kernel (dmesg) ---
+dmesg_errors() {
+    clear
+    msg_info "Errores y advertencias recientes del Kernel (dmesg):"
+    print -r -- "----------------------------------------------------------"
+    "${SUDO[@]}" dmesg --level=err,warn -T 2>/dev/null | tail -n 50
+    print -r -- "----------------------------------------------------------"
+    log_action "dmesg: errores y warnings"
+}
+
+dmesg_hardware() {
+    clear
+    msg_info "Eventos de hardware recientes (USB, Discos, SATA/NVMe):"
+    print -r -- "----------------------------------------------------------"
+    "${SUDO[@]}" dmesg -T 2>/dev/null | grep -iE "usb|sd[a-z]|nvme|ata|scsi" | tail -n 40
+    print -r -- "----------------------------------------------------------"
+    log_action "dmesg: eventos de hardware"
+}
+
+dmesg_live() {
+    clear
+    msg_info "Monitoreo en vivo de dmesg (Ctrl+C para volver)..."
+    sleep 1
+    ( trap - INT; sudo dmesg -wT )
+}
+
+dmesg_search() {
+    local pat
+    prompt_input "Patrón a buscar en dmesg (ej: error, firmware, nic): " pat
+    [[ -z "$pat" ]] && return 0
+    
+    clear
+    msg_info "Resultados para '$pat' en dmesg:"
+    print -r -- "----------------------------------------------------------"
+    
+    local resultados
+    resultados=$(sudo dmesg -T 2>/dev/null | grep -i -- "$pat")
+    
+    if [[ -z "$resultados" ]]; then
+        msg_warn "No se encontraron coincidencias para '$pat' en el buffer actual de dmesg."
+        msg_info "Sugerencia: Prueba con otro término (ej: 'error', 'pci', 'usb', 'fail')."
+    else
+        print -r -- "$resultados" | tail -n 50
+    fi
+    print -r -- "----------------------------------------------------------"
+    log_action "dmesg: búsqueda '$pat'"
+}
+
+# --- Análisis de Arranque (systemd-analyze) ---
+boot_blame() {
+    clear
+    msg_info "Servicios ordenados por tiempo de arranque (culpables del retraso):"
+    print -r -- "----------------------------------------------------------"
+    systemd-analyze blame 2>/dev/null | head -n 15
+    print -r -- "----------------------------------------------------------"
+    log_action "Boot: systemd-analyze blame"
+}
+
+boot_critical_chain() {
+    clear
+    msg_info "Cadena crítica de dependencias (dónde se pierde el tiempo):"
+    print -r -- "----------------------------------------------------------"
+    systemd-analyze critical-chain 2>/dev/null | head -n 20
+    print -r -- "----------------------------------------------------------"
+    log_action "Boot: systemd-analyze critical-chain"
+}
+
+boot_summary() {
+    clear
+    msg_info "Resumen del tiempo de arranque (Kernel + Userspace):"
+    print -r -- "----------------------------------------------------------"
+    systemd-analyze 2>/dev/null
+    print -r -- "----------------------------------------------------------"
+    log_action "Boot: systemd-analyze (resumen)"
+}
+
 menu_native() {
     run_menu "HERRAMIENTAS NATIVAS Y DIAGNÓSTICO LINUX" \
         "#ARCHIVOS Y EDICIÓN" \
@@ -212,7 +288,16 @@ menu_native() {
         "Búsqueda de texto (grep)|act_grep" \
         "Almacenamiento y particiones|act_storage" \
         "#SERVICIOS" \
-        "Gestión de servicios systemctl|act_systemctl"
+        "Gestión de servicios systemctl|act_systemctl" \
+        "#DIAGNÓSTICO DE KERNEL (DMESG)" \
+        "Ver errores/advertencias del kernel|dmesg_errors" \
+        "Eventos de hardware (USB/Discos)|dmesg_hardware" \
+        "Monitoreo en vivo de dmesg|dmesg_live" \
+        "Buscar patrón en dmesg|dmesg_search" \
+        "#ANÁLISIS DE ARRANQUE (SYSTEMD)" \
+        "Resumen del tiempo de boot|boot_summary" \
+        "Servicios lentos (blame)|boot_blame" \
+        "Cadena crítica (critical-chain)|boot_critical_chain"
 }
 
 # --- 4. MONITOREO AVANZADO ---
@@ -225,7 +310,7 @@ menu_monitor() {
         "htop (monitor por procesos)|mon_htop"
 }
 
-# --- 5. BASES DE DATOS (Migración de lo que teníamos) ---
+# --- 5. BASES DE DATOS ---
 detect_db_engines() {
     local v
     if find_sqlcmd &>/dev/null || proc_running sqlservr; then

@@ -217,7 +217,7 @@ run_menu() {
 }
 
 banner_main() {
-    if [[ -x "$SCRIPT_DIR/banner.sh" ]] && "$SCRIPT_DIR/banner.sh"; then return 0; fi
+    if [[ -x "$SCRIPT_DIR/modules/banner.sh" ]] && "$SCRIPT_DIR/modules/banner.sh"; then return 0; fi
     print "╔══════════════════════════════════════════════════════════════════╗"
     print "║                  P R O M E T H E R I O N  2 1 1 2                ║"
     print "║                 M O D U L A R   E D I T I O N                    ║"
