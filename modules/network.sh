@@ -1,30 +1,82 @@
 #!/usr/bin/env zsh
-# Módulo: Red & Conectividad
+# ==============================================================================
+#  Módulo: NETWORK  -  red, diagnóstico avanzado y auditoría con Nmap
+#  Se carga con 'source' desde prom_claude.sh (no se ejecuta directamente).
+# ==============================================================================
+[[ "$ZSH_EVAL_CONTEXT" == *:file* ]] || { print "Este archivo es un módulo de prom_claude.sh: no se ejecuta directamente."; exit 1; }
 
-# --- Funciones de Nmap ---
-nm_target() {
+act_net_basic() {
+    command -v ip &>/dev/null || { msg_err "Falta 'ip' (paquete iproute2)."; return 0; }
+    msg_info "Interfaces de red detectadas:"
+    ip -brief address | awk '{print "  > " $1 " (" $2 ") " $3}'
+    print -r -- "------------------------------------------"
+    print " 1) Direcciones IP detalladas (ip a)"
+    print " 2) Tabla de ruteo (ip route)"
+    print " 3) Puertos en escucha TCP/UDP (ss -tulpn)"
+    print " 4) Prueba rápida de conectividad (ping)"
+    print " 5) Ficha técnica de una interfaz"
+    local choice
+    prompt_input "Selecciona opción [1-5]: " choice
+    case "$choice" in
+        1) ip address ;;
+        2) ip route ;;
+        3) "${SUDO[@]}" ss -tulpn ;;
+        4) local target
+           prompt_input "IP o host de prueba: " target
+           valid_host "$target" && ping -c 4 "$target" || msg_err "Destino no válido o sin respuesta." ;;
+        5) local iface state mac mtu ipv4 ipv6 gw
+           prompt_input "Interfaz (ej: eth0, ens18, wlan0): " iface
+           if ! valid_ident "$iface" || ! ip link show dev "$iface" &>/dev/null; then
+               msg_err "La interfaz '$iface' no existe."; return 0
+           fi
+           state=$(ip -o link show dev "$iface" | awk '{for(i=1;i<=NF;i++) if($i=="state"){print $(i+1); exit}}')
+           mtu=$(ip -o link show dev "$iface" | awk '{for(i=1;i<=NF;i++) if($i=="mtu"){print $(i+1); exit}}')
+           mac=$(ip -o link show dev "$iface" | awk '{for(i=1;i<=NF;i++) if($i=="link/ether"){print $(i+1); exit}}')
+           ipv4=$(ip -4 -o addr show dev "$iface" | awk '{print $4; exit}')
+           ipv6=$(ip -6 -o addr show dev "$iface" scope global | awk '{print $4; exit}')
+           gw=$(ip route show default dev "$iface" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+           print ""
+           box_open "FICHA TÉCNICA DE INTERFAZ"
+           box_row "Interfaz" "$iface"
+           box_row "Estado" "${state:-Desconocido}"
+           box_row "MAC" "${mac:-N/A}"
+           box_row "MTU" "${mtu:-N/A}"
+           box_row "IPv4" "${ipv4:-N/A}"
+           box_row "IPv6" "${ipv6:-N/A}"
+           box_row "Gateway" "${gw:-N/A}"
+           box_close ;;
+        *) msg_warn "Opción no válida."; return 0 ;;
+    esac
+    log_action "Nativo: red básica ($choice)"
+}
+
+nm_target() {   # nm_target VAR "mensaje"
     local _t
     prompt_input "$2" _t
     [[ -z "$_t" ]] && return 1
     valid_host "$_t" || { msg_err "Objetivo no válido."; return 1; }
     typeset -g "$1=$_t"
 }
+
 nm_quick() {
     local t; nm_target t "IP o hostname objetivo: " || return 0
     msg_info "Escaneo rápido en '$t'..."; run_interruptible nmap -T4 "$t"
     log_action "Nmap: escaneo rápido en $t"
 }
+
 nm_versions() {
     local t; nm_target t "IP o hostname objetivo: " || return 0
     msg_info "Detección de versiones (-sV) en '$t'..."; run_interruptible nmap -sV -T4 "$t"
     log_action "Nmap: -sV en $t"
 }
+
 nm_aggressive() {
     local t; nm_target t "IP o hostname objetivo: " || return 0
     msg_info "Escaneo agresivo (-A) en '$t' (requiere root para detectar SO)..."
     run_interruptible "${SUDO[@]}" nmap -A -T4 "$t"
     log_action "Nmap: -A en $t"
 }
+
 nm_discover() {
     local def net
     def=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4; exit}')
@@ -35,7 +87,21 @@ nm_discover() {
     log_action "Nmap: ping scan en $net"
 }
 
-# --- Funciones de Diagnóstico Avanzado ---
+menu_nmap() {
+    if ! need nmap; then pause_screen; return 0; fi
+    if (( NMAP_ACK == 0 )); then
+        print ""
+        msg_warn "Escanear sistemas ajenos sin autorización puede ser ilegal."
+        confirm "¿Confirmas que solo escanearás equipos propios o autorizados?" || return 0
+        NMAP_ACK=1
+    fi
+    run_menu "AUDITORÍA DE RED Y SEGURIDAD (NMAP) - $(nmap --version | head -n 1 | cut -c1-40)" \
+        "Escaneo rápido de puertos en IP/Host|nm_quick" \
+        "Escaneo completo con detección de versiones (-sV)|nm_versions" \
+        "Escaneo agresivo (SO, versiones y scripts -A)|nm_aggressive" \
+        "Descubrimiento de hosts activos en la red local|nm_discover"
+}
+
 na_http() {
     local u
     prompt_input "URL o IP objetivo (ej: https://google.com): " u
@@ -68,6 +134,7 @@ na_port() {
     if command -v nc &>/dev/null || need nc; then
         nc -zv -w 3 "$h" "$p"
     elif command -v bash &>/dev/null; then
+        # zsh no tiene /dev/tcp: se delega en bash con timeout
         if timeout 4 bash -c 'exec 3<>/dev/tcp/$0/$1' "$h" "$p" 2>/dev/null; then
             msg_ok "Puerto $p en $h ABIERTO y accesible."
         else
@@ -214,22 +281,6 @@ na_speed() {
     log_action "RedAv: speedtest Cloudflare"
 }
 
-# --- Submenús ---
-menu_nmap() {
-    if ! need nmap; then pause_screen; return 0; fi
-    if (( NMAP_ACK == 0 )); then
-        print ""
-        msg_warn "Escanear sistemas ajenos sin autorización puede ser ilegal."
-        confirm "¿Confirmas que solo escanearás equipos propios o autorizados?" || return 0
-        NMAP_ACK=1
-    fi
-    run_menu "AUDITORÍA DE RED Y SEGURIDAD (NMAP) - $(nmap --version | head -n 1 | cut -c1-40)" \
-        "Escaneo rápido de puertos en IP/Host|nm_quick" \
-        "Escaneo completo con detección de versiones (-sV)|nm_versions" \
-        "Escaneo agresivo (SO, versiones y scripts -A)|nm_aggressive" \
-        "Descubrimiento de hosts activos en la red local|nm_discover"
-}
-
 menu_netadv() {
     run_menu "DIAGNÓSTICO Y PRUEBAS DE RED AVANZADAS" \
         "#CONECTIVIDAD Y RESOLUCIÓN" \
@@ -248,9 +299,12 @@ menu_netadv() {
         "Test de velocidad de descarga (Cloudflare)|na_speed"
 }
 
-# --- Menú Principal del Módulo de Red ---
-network_menu() {
+menu_network() {
     run_menu "RED Y CONECTIVIDAD" \
-        "Diagnóstico de red avanzado (IP, DNS, SSL, HTTP, puertos)|menu_netadv|nopause" \
-        "Auditoría y seguridad (Nmap)|menu_nmap|nopause"
+        "#INTERFACES Y RUTAS" \
+        "Red básica e interfaces (ip, rutas, puertos en escucha)|act_net_basic" \
+        "#DIAGNÓSTICO" \
+        "Diagnóstico avanzado: HTTP, ping, puertos, DNS, SSL, WHOIS|menu_netadv|nopause" \
+        "#SEGURIDAD" \
+        "Auditoría de red (Nmap)|menu_nmap|nopause"
 }

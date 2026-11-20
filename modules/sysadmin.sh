@@ -1,13 +1,18 @@
 #!/usr/bin/env zsh
-# Módulo: Sysadmin & Servidor
+# ==============================================================================
+#  Módulo: SYSADMIN  -  diagnóstico, recursos, servicios, logs, paquetes y seguridad del host
+#  Se carga con 'source' desde prom_claude.sh (no se ejecuta directamente).
+# ==============================================================================
+[[ "$ZSH_EVAL_CONTEXT" == *:file* ]] || { print "Este archivo es un módulo de prom_claude.sh: no se ejecuta directamente."; exit 1; }
 
-# --- 1. HEALTH CHECK ---
+# ==== DIAGNÓSTICO Y ESTADO ====
 mem_stats() {
     local t a st sf
     read -r t a st sf <<< "$(awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} /^SwapTotal:/{st=$2} /^SwapFree:/{sf=$2} END{printf "%.0f %.0f %.0f %.0f", t*1024, a*1024, st*1024, sf*1024}' /proc/meminfo 2>/dev/null)"
     MEM_TOTAL=${t:-0}; MEM_AVAIL=${a:-0}; SWAP_TOTAL=${st:-0}; SWAP_FREE=${sf:-0}
 }
 
+# Imprime nº de actualizaciones pendientes, o "N/D" si no se puede saber.
 updates_pending() {
     local n=""
     case "$PKG_MGR" in
@@ -21,8 +26,7 @@ updates_pending() {
     [[ "$n" == <-> ]] && print "$n" || print "N/D"
 }
 
-act_health() {
-    clear
+health_check() {
     print "===================================================================="
     print "               PANORAMA GENERAL DEL SERVIDOR (HEALTH)"
     print -r -- "               $(date '+%Y-%m-%d %H:%M:%S')"
@@ -38,7 +42,7 @@ act_health() {
 
     section "SISTEMA Y HARDWARE"
     kv "Hostname" "$HOST"
-    kv "OS" "$(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)"
+    kv "OS" "$OS_NAME"
     kv "Kernel" "$kernel ($arch)"
     kv "Uptime" "${up:-N/D}"
     kv "CPU" "${cpu:-N/D}"
@@ -107,7 +111,7 @@ act_health() {
             systemctl is-active --quiet "$svc" 2>/dev/null || continue
             sid=$(systemctl show -p Id --value "$svc" 2>/dev/null)
             sid="${sid:-$svc}"
-            (( ${+seen[$sid]} )) && continue
+            (( ${+seen[$sid]} )) && continue      # evita duplicar alias (ssh/sshd)
             seen[$sid]=1; found=1
             print -r -- " ${C_GRN}[ OK ]${C_RST} ${sid%.service}"
         done
@@ -118,12 +122,22 @@ act_health() {
             print -r -- " ${C_RED}[FALLO]${C_RST} Unidades en estado failed:"
             print -r -- "$failed" | sed 's/^/          - /'
         else
-            print -r -- " ${C_GRN}[OK]${C_RST} Sin unidades fallidas"
+            print -r -- " ${C_GRN}[ OK ]${C_RST} Sin unidades fallidas (systemctl --failed)"
         fi
         if command -v journalctl &>/dev/null; then
             local jerr; jerr=$(journalctl -p err -b -q --no-pager 2>/dev/null | wc -l | tr -d ' ')
-            print -r -- " [ i ] Entradas 'err' en este arranque: ${jerr:-0}"
+            print -r -- " [ i ] Entradas 'err' en este arranque: ${jerr:-0} (journalctl -p err -b)"
         fi
+    else
+        print " (systemd no disponible: sección omitida)"
+    fi
+
+    section "BASES DE DATOS DETECTADAS"
+    detect_db_engines
+    if (( DB_FOUND == 0 )); then
+        print " (No se detectaron motores de BBDD en el PATH ni procesos activos)"
+    else
+        print " (Menú Sysadmin > Bases de datos para conectar y listar BBDD)"
     fi
 
     section "ESTADO DE PROCESOS"
@@ -140,40 +154,71 @@ act_health() {
     print " TOP 5 CPU:"
     ps -eo user:14,pcpu,pmem,comm --sort=-pcpu 2>/dev/null | head -n 6 | sed 's/^/  /'
     print ""
-    log_action "Health Check ejecutado"
 }
 
-# --- 2. HERRAMIENTAS NATIVAS ---
-act_edit() {
-    local -a editors=()
-    local e choice target n=1
-    for e in nvim vim nano vi; do command -v "$e" &>/dev/null && editors+=("$e"); done
-    if (( ${#editors} == 0 )); then msg_err "No hay editores instalados."; return 0; fi
-    for e in "${editors[@]}"; do print " $n) $e"; n=$(( n + 1 )); done
-    prompt_input "Selecciona el editor [1-${#editors}]: " choice
-    [[ "$choice" == <-> ]] && (( choice >= 1 && choice <= ${#editors} )) || choice=1
-    e="${editors[$choice]}"
-    prompt_input "Ruta del archivo a editar: " target
-    [[ -z "$target" ]] && return 0
-    if [[ -w "$target" ]] || [[ ! -e "$target" && -w "${target:h}" ]]; then
-        "$e" "$target"
-    else
-        if confirm "Sin permiso de escritura. ¿Abrir con sudo?"; then
-            sudo "$e" "$target"
-        fi
+act_health() {
+    clear
+    health_check
+    log_action "Panorama general del servidor generado"
+}
+
+metrics_output() {
+    mem_stats
+    local l1 l5 l15 rest upt procs zomb ports upd failed
+    read -r l1 l5 l15 rest < /proc/loadavg 2>/dev/null
+    upt=$(awk '{printf "%d", $1}' /proc/uptime 2>/dev/null)
+    procs=$(ps -eo pid= 2>/dev/null | wc -l | tr -d ' ')
+    zomb=$(ps -eo stat= 2>/dev/null | grep -c '^Z')
+    ports=$(ss -tuln 2>/dev/null | awk 'NR>1' | wc -l | tr -d ' ')
+    upd=$(updates_pending)
+
+    print "# HELP prom_claude_load Load average del host"
+    print "# TYPE prom_claude_load gauge"
+    print "prom_claude_load{period=\"1m\"} ${l1:-0}"
+    print "prom_claude_load{period=\"5m\"} ${l5:-0}"
+    print "prom_claude_load{period=\"15m\"} ${l15:-0}"
+    print "# TYPE prom_claude_uptime_seconds gauge"
+    print "prom_claude_uptime_seconds ${upt:-0}"
+    print "# TYPE prom_claude_memory_bytes gauge"
+    print "prom_claude_memory_bytes{type=\"total\"} $MEM_TOTAL"
+    print "prom_claude_memory_bytes{type=\"used\"} $(( MEM_TOTAL - MEM_AVAIL ))"
+    print "prom_claude_memory_bytes{type=\"swap_used\"} $(( SWAP_TOTAL - SWAP_FREE ))"
+    print "# TYPE prom_claude_processes gauge"
+    print "prom_claude_processes{state=\"total\"} ${procs:-0}"
+    print "prom_claude_processes{state=\"zombie\"} ${zomb:-0}"
+    print "# TYPE prom_claude_listening_sockets gauge"
+    print "prom_claude_listening_sockets ${ports:-0}"
+    print "# TYPE prom_claude_disk_used_percent gauge"
+    df -P -x tmpfs -x devtmpfs -x squashfs -x overlay 2>/dev/null | awk 'NR>1 {
+        u=$5; sub("%","",u); m=$6; gsub(/\\/,"\\\\",m); gsub(/"/,"\\\"",m)
+        printf "prom_claude_disk_used_percent{mount=\"%s\"} %s\n", m, u
+    }'
+    if have_systemd; then
+        failed=$(systemctl --failed --no-legend --plain 2>/dev/null | wc -l | tr -d ' ')
+        print "# TYPE prom_claude_failed_units gauge"
+        print "prom_claude_failed_units ${failed:-0}"
+    fi
+    if [[ "$upd" == <-> ]]; then
+        print "# TYPE prom_claude_updates_pending gauge"
+        print "prom_claude_updates_pending $upd"
     fi
 }
 
-act_grep() {
-    local lf pattern
-    prompt_input "Ruta del archivo: " lf
-    [[ -z "$lf" ]] && return 0
-    if [[ ! -f "$lf" ]]; then msg_err "El archivo no existe."; return 0; fi
-    prompt_input "Patrón (regex extendida): " pattern
-    [[ -z "$pattern" ]] && return 0
-    local -a cmd=(grep -inE -- "$pattern" "$lf")
-    [[ ! -r "$lf" ]] && cmd=("${SUDO[@]}" "${cmd[@]}")
-    "${cmd[@]}" | head -n 50
+act_resources() {
+    local choice
+    print " 1) Top 10 procesos por CPU"
+    print " 2) Top 10 procesos por memoria"
+    print " 3) Memoria RAM y Swap (free -h)"
+    print " 4) Monitor interactivo básico (top)"
+    prompt_input "Selecciona opción [1-4]: " choice
+    case "$choice" in
+        1) ps -eo pid,user:14,pcpu,pmem,comm --sort=-pcpu | head -n 11 ;;
+        2) ps -eo pid,user:14,pcpu,pmem,comm --sort=-pmem | head -n 11 ;;
+        3) free -h ;;
+        4) run_interruptible top ;;
+        *) msg_warn "Opción no válida."; return 0 ;;
+    esac
+    log_action "Nativo: monitoreo de recursos ($choice)"
 }
 
 act_storage() {
@@ -184,276 +229,440 @@ act_storage() {
         printf "║ %-20.20s │ %-8s │ %-8s │ %-8s │ %-6s ║\n", $6, $2, $3, $4, $5
     }'
     print "╚══════════════════════╧══════════╧══════════╧══════════╧════════╝"
-}
-
-act_systemctl() {
-    have_systemd || { msg_err "systemd no está disponible."; return 0; }
-    systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print "  > " $1}'
-    local svc act
-    prompt_input "Servicio a gestionar: " svc
-    [[ -z "$svc" ]] && return 0
-    [[ "$svc" != *.service ]] && svc="${svc}.service"
-    print " 1) status | 2) start | 3) restart | 4) stop | 5) enable | 6) disable"
-    prompt_input "Acción [1-6]: " act
-    case "$act" in
-        1) "${SUDO[@]}" systemctl status "$svc" --no-pager ;;
-        2) "${SUDO[@]}" systemctl start "$svc" ;;
-        3) "${SUDO[@]}" systemctl restart "$svc" ;;
-        4) "${SUDO[@]}" systemctl stop "$svc" ;;
-        5) "${SUDO[@]}" systemctl enable "$svc" ;;
-        6) "${SUDO[@]}" systemctl disable "$svc" ;;
-    esac
-}
-
-# --- Diagnóstico de Kernel (dmesg) ---
-dmesg_errors() {
-    clear
-    msg_info "Errores y advertencias recientes del Kernel (dmesg):"
-    print -r -- "----------------------------------------------------------"
-    "${SUDO[@]}" dmesg --level=err,warn -T 2>/dev/null | tail -n 50
-    print -r -- "----------------------------------------------------------"
-    log_action "dmesg: errores y warnings"
-}
-
-dmesg_hardware() {
-    clear
-    msg_info "Eventos de hardware recientes (USB, Discos, SATA/NVMe):"
-    print -r -- "----------------------------------------------------------"
-    "${SUDO[@]}" dmesg -T 2>/dev/null | grep -iE "usb|sd[a-z]|nvme|ata|scsi" | tail -n 40
-    print -r -- "----------------------------------------------------------"
-    log_action "dmesg: eventos de hardware"
-}
-
-dmesg_live() {
-    clear
-    msg_info "Monitoreo en vivo de dmesg (Ctrl+C para volver)..."
-    sleep 1
-    ( trap - INT; sudo dmesg -wT )
-}
-
-dmesg_search() {
-    local pat
-    prompt_input "Patrón a buscar en dmesg (ej: error, firmware, nic): " pat
-    [[ -z "$pat" ]] && return 0
-    
-    clear
-    msg_info "Resultados para '$pat' en dmesg:"
-    print -r -- "----------------------------------------------------------"
-    
-    local resultados
-    resultados=$(sudo dmesg -T 2>/dev/null | grep -i -- "$pat")
-    
-    if [[ -z "$resultados" ]]; then
-        msg_warn "No se encontraron coincidencias para '$pat' en el buffer actual de dmesg."
-        msg_info "Sugerencia: Prueba con otro término (ej: 'error', 'pci', 'usb', 'fail')."
-    else
-        print -r -- "$resultados" | tail -n 50
+    if command -v lsblk &>/dev/null; then
+        print ""
+        msg_info "Dispositivos de bloque (lsblk):"
+        lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT 2>/dev/null
     fi
-    print -r -- "----------------------------------------------------------"
-    log_action "dmesg: búsqueda '$pat'"
+    log_action "Nativo: almacenamiento"
 }
 
-# --- Análisis de Arranque (systemd-analyze) ---
-boot_blame() {
-    clear
-    msg_info "Servicios ordenados por tiempo de arranque (culpables del retraso):"
-    print -r -- "----------------------------------------------------------"
-    systemd-analyze blame 2>/dev/null | head -n 15
-    print -r -- "----------------------------------------------------------"
-    log_action "Boot: systemd-analyze blame"
-}
-
-boot_critical_chain() {
-    clear
-    msg_info "Cadena crítica de dependencias (dónde se pierde el tiempo):"
-    print -r -- "----------------------------------------------------------"
-    systemd-analyze critical-chain 2>/dev/null | head -n 20
-    print -r -- "----------------------------------------------------------"
-    log_action "Boot: systemd-analyze critical-chain"
-}
-
-boot_summary() {
-    clear
-    msg_info "Resumen del tiempo de arranque (Kernel + Userspace):"
-    print -r -- "----------------------------------------------------------"
-    systemd-analyze 2>/dev/null
-    print -r -- "----------------------------------------------------------"
-    log_action "Boot: systemd-analyze (resumen)"
-}
-
-menu_native() {
-    run_menu "HERRAMIENTAS NATIVAS Y DIAGNÓSTICO LINUX" \
-        "#ARCHIVOS Y EDICIÓN" \
-        "Editar archivos|act_edit" \
-        "Búsqueda de texto (grep)|act_grep" \
-        "Almacenamiento y particiones|act_storage" \
-        "#SERVICIOS" \
-        "Gestión de servicios systemctl|act_systemctl" \
-        "#DIAGNÓSTICO DE KERNEL (DMESG)" \
-        "Ver errores/advertencias del kernel|dmesg_errors" \
-        "Eventos de hardware (USB/Discos)|dmesg_hardware" \
-        "Monitoreo en vivo de dmesg|dmesg_live" \
-        "Buscar patrón en dmesg|dmesg_search" \
-        "#ANÁLISIS DE ARRANQUE (SYSTEMD)" \
-        "Resumen del tiempo de boot|boot_summary" \
-        "Servicios lentos (blame)|boot_blame" \
-        "Cadena crítica (critical-chain)|boot_critical_chain"
-}
-
-# --- 4. MONITOREO AVANZADO ---
 mon_btop() { need btop && run_interruptible btop; }
+
 mon_htop() { need htop && run_interruptible htop; }
 
+# ==== SERVICIOS, LOGS Y TAREAS PROGRAMADAS ====
 menu_monitor() {
     run_menu "MONITOREO AVANZADO DE RECURSOS" \
         "btop (monitor moderno)|mon_btop" \
         "htop (monitor por procesos)|mon_htop"
 }
 
-# --- 5. BASES DE DATOS ---
-detect_db_engines() {
-    local v
-    if find_sqlcmd &>/dev/null || proc_running sqlservr; then
-        print " [ OK ] Microsoft SQL Server"; return 0
+act_systemctl() {
+    have_systemd || { msg_err "systemd no está disponible en este sistema."; return 0; }
+    msg_info "Servicios en ejecución:"
+    print -r -- "------------------------------------------"
+    systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print "  > " $1}'
+    print -r -- "------------------------------------------"
+
+    local svc act crit=0
+    prompt_input "Servicio a gestionar (ej: ssh o ssh.service): " svc
+    [[ -z "$svc" ]] && return 0
+    valid_ident "$svc" || { msg_err "Nombre de servicio no válido."; return 0; }
+    [[ "$svc" != *.service ]] && svc="${svc}.service"
+    case "${svc%.service}" in ssh|sshd|NetworkManager|systemd-networkd|networking|network) crit=1 ;; esac
+
+    print ""
+    print " Servicio seleccionado: $svc"
+    print " 1) Consultar estado (status)"
+    print " 2) Iniciar (start)"
+    print " 3) Reiniciar (restart)"
+    print " 4) Detener (stop)"
+    print " 5) Habilitar en el arranque (enable)"
+    print " 6) Deshabilitar del arranque (disable)"
+    prompt_input "Elige la acción [1-6]: " act
+
+    if (( crit )) && [[ "$act" == (3|4|6) ]]; then
+        msg_warn "'$svc' es crítico: podrías quedarte sin acceso remoto."
+        confirm "¿Continuar?" || return 0
     fi
-    if command -v mysql &>/dev/null || proc_running mysqld || proc_running mariadbd; then
-        print " [ OK ] MySQL/MariaDB"; return 0
-    fi
-    if command -v psql &>/dev/null || proc_running postgres; then
-        print " [ OK ] PostgreSQL"; return 0
-    fi
-    print "  (ninguno detectado)"
+    case "$act" in
+        1) "${SUDO[@]}" systemctl status "$svc" --no-pager ;;
+        2) "${SUDO[@]}" systemctl start "$svc"   && msg_ok "Servicio iniciado."    ; log_action "Systemctl: start $svc" ;;
+        3) "${SUDO[@]}" systemctl restart "$svc" && msg_ok "Servicio reiniciado."  ; log_action "Systemctl: restart $svc" ;;
+        4) "${SUDO[@]}" systemctl stop "$svc"    && msg_ok "Servicio detenido."    ; log_action "Systemctl: stop $svc" ;;
+        5) "${SUDO[@]}" systemctl enable "$svc"  && msg_ok "Servicio habilitado."  ; log_action "Systemctl: enable $svc" ;;
+        6) "${SUDO[@]}" systemctl disable "$svc" && msg_ok "Servicio deshabilitado."; log_action "Systemctl: disable $svc" ;;
+        *) msg_warn "Acción no válida." ;;
+    esac
 }
 
-db_mssql() {
-    local bin
-    if ! bin=$(find_sqlcmd); then
-        msg_warn "'sqlcmd' no está instalado."; return 0
-    fi
-    local -a extra=()
-    "$bin" '-?' 2>&1 | grep -qE 'Version (1[7-9]|[2-9][0-9])' && extra=(-C)
-
-    local host user pass out rc dbs
-    prompt_input "Servidor [Default: localhost]: " host;   host="${host:-localhost}"
-    prompt_input "Usuario [Default: sa]: " user;           user="${user:-sa}"
-    prompt_password "Contraseña: " pass
-    [[ -z "$pass" ]] && { msg_err "SQL Server requiere contraseña."; return 0; }
-
-    msg_info "Consultando versión y bases de datos en $host..."
-    out=$(SQLCMDPASSWORD="$pass" "$bin" -S "$host" -U "$user" "${extra[@]}" -l 5 -h -1 -W \
-          -Q "SET NOCOUNT ON; SELECT @@VERSION" 2>&1); rc=$?
-    if (( rc != 0 )) || [[ "$out" == *"Sqlcmd: Error"* || "$out" == *"Msg "* ]]; then
-        msg_err "No se pudo conectar a SQL Server."
-        return 0
-    fi
-    dbs=$(SQLCMDPASSWORD="$pass" "$bin" -S "$host" -U "$user" "${extra[@]}" -l 5 -h -1 -W \
-          -Q "SET NOCOUNT ON; SELECT name FROM sys.databases ORDER BY name" 2>&1)
-    print -r -- "--- VERSIÓN ---"; print -r -- "$out" | head -n 1
-    print ""; print -r -- "--- BASES DE DATOS ---"; print -r -- "$dbs" | sed '/^$/d; s/^/  > /'
+act_journal() {
+    have_systemd || { msg_err "journalctl requiere systemd."; return 0; }
+    msg_info "Servicios activos disponibles:"
+    print -r -- "------------------------------------------"
+    systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print "  > " $1}'
+    print -r -- "------------------------------------------"
+    local svc n
+    prompt_input "Servicio a consultar (ej: ssh, docker): " svc
+    [[ -z "$svc" ]] && return 0
+    valid_ident "$svc" || { msg_err "Nombre de servicio no válido."; return 0; }
+    [[ "$svc" != *.service ]] && svc="${svc}.service"
+    prompt_input "Cantidad de líneas [Default: 40]: " n
+    valid_num "$n" || n=40
+    msg_info "Últimas $n líneas de '$svc':"
+    journal -u "$svc" -n "$n" --no-pager
+    log_action "Journalctl: $svc ($n líneas)"
 }
 
-db_mysql() {
-    need mysql || return 0
-    local user pass
-    prompt_input "Usuario [Default: root]: " user; user="${user:-root}"
-    prompt_password "Contraseña: " pass
-    local -a my=(mysql -u "$user" -N -B)
-    [[ -z "$pass" ]] && my=("${SUDO[@]}" "${my[@]}")
-    local out; out=$(MYSQL_PWD="$pass" "${my[@]}" -e "SHOW DATABASES;" 2>&1)
-    print -r -- "$out" | sed '/^$/d; s/^/  > /'
-}
-
-db_pg() {
-    need psql || return 0
-    local user dbname pass
-    prompt_input "Usuario [Default: postgres]: " user;      user="${user:-postgres}"
-    prompt_input "Base de datos [Default: postgres]: " dbname; dbname="${dbname:-postgres}"
-    prompt_password "Contraseña: " pass
-    local -a pg=(psql -h localhost -U "$user" -d "$dbname" -At)
-    [[ -z "$pass" ]] && pg=(sudo -u "$user" psql -d "$dbname" -At)
-    local out; out=$(PGPASSWORD="$pass" "${pg[@]}" -c "SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY 1;" 2>&1)
-    print -r -- "$out" | sed '/^$/d; s/^/  > /'
-}
-
-menu_db() {
-    run_menu "GESTIÓN DE BASES DE DATOS (BBDD)" \
-        "Detectar motores instalados|detect_db_engines" \
-        "#SQL SERVER" \
-        "Listar BBDD en SQL Server|db_mssql" \
-        "#MYSQL / MARIADB" \
-        "Listar BBDD en MySQL|db_mysql" \
-        "#POSTGRESQL" \
-        "Listar BBDD en PostgreSQL|db_pg"
-}
-
-# --- 6. CRON Y LOGS ---
 cron_user_list() {
     msg_info "Tareas cron del usuario actual ($USER):"
-    crontab -l 2>/dev/null || print "No hay tareas programadas."
+    print -r -- "------------------------------------------"
+    crontab -l 2>/dev/null || print "No hay tareas programadas para este usuario (o cron no está instalado)."
 }
+
+cron_user_edit() {
+    command -v crontab &>/dev/null || { msg_err "crontab no está instalado."; return 0; }
+    msg_info "Abriendo editor de crontab (guarda y sal para aplicar)..."
+    crontab -e
+    log_action "Cron: edición de crontab de usuario"
+}
+
 cron_system_list() {
     msg_info "Tareas programadas del sistema:"
+    print -r -- "--- /etc/crontab ---"
     grep -vE '^\s*(#|$)' /etc/crontab 2>/dev/null || print "(sin entradas)"
+    print ""
+    print -r -- "--- /etc/cron.d/ ---"
     ls -1 /etc/cron.d/ 2>/dev/null || print "(no existe o está vacío)"
 }
+
+cron_timers() {
+    have_systemd || { msg_err "Requiere systemd."; return 0; }
+    msg_info "Timers de systemd (equivalente moderno de cron):"
+    systemctl list-timers --all --no-pager
+}
+
 log_sizes() {
     msg_info "Mayores consumidores en /var/log:"
     "${SUDO[@]}" du -ah -d 1 /var/log 2>/dev/null | sort -rh | head -n 15
+    if command -v journalctl &>/dev/null; then
+        print ""
+        msg_info "Uso de disco del journal:"
+        journal --disk-usage 2>/dev/null
+    fi
 }
 
+# Deja la ruta elegida en CHOSEN_LOG (vacía si se cancela)
 choose_log() {
     CHOSEN_LOG=""
-    local -a logs
-    logs=( ${(f)"$(find /var/log -maxdepth 2 -type f ! -name '*.gz' ! -name 'btmp*' ! -name 'wtmp*' ! -name 'lastlog' 2>/dev/null | sort)"} )
-    if (( ${#logs} == 0 )); then msg_warn "No se encontraron logs."; return 1; fi
-    local i=1 lf
-    for lf in "${logs[@]}"; do printf " %3d) %s\n" "$i" "$lf"; i=$(( i + 1 )); done
-    local num
-    prompt_input "Número del log a ver (o 'q'): " num
-    [[ -z "$num" || "$num" == q ]] && return 1
-    if [[ "$num" == <-> ]] && (( num >= 1 && num <= ${#logs} )); then
-        CHOSEN_LOG="${logs[$num]}"
+    local method num
+    print " 1) Elegir de la lista de logs disponibles"
+    print " 2) Escribir la ruta manualmente"
+    prompt_input "Selecciona una opción [1-2]: " method
+
+    if [[ "$method" == 1 ]]; then
+        local -a logs
+        logs=( ${(f)"$(find /var/log -maxdepth 2 -type f ! -name '*.gz' ! -name '*.xz' ! -name '*.zst' \
+                        ! -name '*.bz2' ! -name '*.zip' ! -name '*.[0-9]' ! -name 'btmp*' ! -name 'wtmp*' \
+                        ! -name 'lastlog' ! -name 'faillog' 2>/dev/null | sort)"} )
+        if (( ${#logs} == 0 )); then
+            msg_warn "No se encontraron logs de texto en /var/log."
+            have_systemd && msg_info "Este sistema usa el journal: prueba la opción de journalctl (menú 2)."
+            return 1
+        fi
+        local i=1 lf
+        for lf in "${logs[@]}"; do printf " %3d) %s\n" "$i" "$lf"; i=$(( i + 1 )); done
+        print ""
+        prompt_input "Número del log (o 'q' para cancelar): " num
+        [[ -z "$num" || "$num" == q ]] && return 1
+        if [[ "$num" == <-> ]] && (( num >= 1 && num <= ${#logs} )); then
+            CHOSEN_LOG="${logs[$num]}"
+        else
+            msg_err "Selección no válida."; return 1
+        fi
+    elif [[ "$method" == 2 ]]; then
+        prompt_input "Ruta completa del log (ej: /var/log/nginx/error.log): " CHOSEN_LOG
+        if [[ ! -f "$CHOSEN_LOG" ]]; then
+            msg_err "La ruta '$CHOSEN_LOG' no es válida o el archivo no existe."
+            CHOSEN_LOG=""; return 1
+        fi
     else
-        msg_err "Selección no válida."; return 1
+        msg_warn "Opción no válida."; return 1
     fi
     return 0
 }
 
 log_tail() {
     choose_log || return 0
-    msg_info "Mostrando '$CHOSEN_LOG' en vivo (Ctrl+C para salir)..."
+    msg_info "Mostrando '$CHOSEN_LOG' en vivo (Ctrl+C para volver)..."
     sleep 1
     run_interruptible "${SUDO[@]}" tail -n 50 -f "$CHOSEN_LOG"
+    log_action "Logs: tail -f $CHOSEN_LOG"
 }
+
 log_filter() {
     choose_log || return 0
-    local pattern
+    local pattern nlines results count out_action out_file
+    print ""
     prompt_input "Patrón a buscar [Default: error|fail|crit|warn]: " pattern
     pattern="${pattern:-error|fail|crit|warn}"
-    msg_info "Buscando en '$CHOSEN_LOG'..."
-    "${SUDO[@]}" tail -n 500 "$CHOSEN_LOG" | grep -iE -- "$pattern" | ${PAGER:-less}
+    prompt_input "Líneas finales a revisar [Default: 500]: " nlines
+    valid_num "$nlines" || nlines=500
+
+    msg_info "Buscando '$pattern' en las últimas $nlines líneas de '$CHOSEN_LOG'..."
+    results=$("${SUDO[@]}" tail -n "$nlines" "$CHOSEN_LOG" | grep -iE -- "$pattern")
+    if [[ -z "$results" ]]; then
+        msg_info "No se encontraron coincidencias."
+        return 0
+    fi
+    count=$(print -r -- "$results" | wc -l | tr -d ' ')
+    msg_ok "Se encontraron $count coincidencias."
+    print ""
+    print " 1) Guardar en archivo (${TMPDIR:-/tmp})"
+    print " 2) Ver en pantalla (paginador)"
+    prompt_input "Selecciona una opción [1-2]: " out_action
+    if [[ "$out_action" == 1 ]]; then
+        out_file="${TMPDIR:-/tmp}/filtro_${CHOSEN_LOG:t}_$(date +%Y%m%d_%H%M%S).log"
+        ( umask 077; print -r -- "$results" > "$out_file" )
+        msg_ok "Resultado guardado en: $out_file (permisos 600)"
+        log_action "Logs: filtro guardado en $out_file"
+    else
+        print -r -- "$results" | ${PAGER:-less}
+        log_action "Logs: filtro visto en pantalla de $CHOSEN_LOG"
+    fi
 }
 
 menu_cron_logs() {
-    run_menu "TAREAS PROGRAMADAS Y LOGS" \
-        "#CRON" \
+    run_menu "TAREAS PROGRAMADAS (CRON / TIMERS) Y LOGS" \
+        "#TAREAS PROGRAMADAS" \
         "Listar mis tareas (crontab -l)|cron_user_list" \
-        "Listar tareas del sistema (/etc/crontab)|cron_system_list" \
+        "Editar mis tareas (crontab -e)|cron_user_edit" \
+        "Listar tareas del sistema (/etc/crontab, /etc/cron.d)|cron_system_list" \
+        "Listar timers de systemd|cron_timers" \
         "#LOGS" \
-        "Mayores consumidores de /var/log|log_sizes" \
+        "Mayores consumidores de /var/log y journal|log_sizes" \
         "Ver un log en tiempo real (tail -f)|log_tail" \
-        "Buscar y filtrar logs|log_filter"
+        "Buscar y filtrar logs (avanzado)|log_filter"
 }
 
-# --- Menú Principal del Módulo ---
-sysadmin_menu() {
-    run_menu "SYSADMIN & SERVIDOR" \
-        "#SISTEMA" \
-        "Actualizar paquetes del sistema ($PKG_MGR)|sys_update_system" \
-        "#DIAGNÓSTICO Y GESTIÓN" \
+# ==============================================================================
+#  PAQUETES: actualización con log y resumen   (reemplaza al antiguo update.sh)
+# ==============================================================================
+# Lista de paquetes con actualización pendiente (uno por línea).
+updates_list() {
+    case "$PKG_MGR" in
+        apt)     apt-get -s upgrade 2>/dev/null | awk '/^Inst/{print $2}' ;;
+        dnf|yum) "$PKG_MGR" -C -q check-update 2>/dev/null \
+                     | awk '/^[[:alnum:]_.+-]+\.[[:alnum:]_]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+/{print $1}' ;;
+        pacman)  command -v checkupdates &>/dev/null && checkupdates 2>/dev/null | awk '{print $1}' ;;
+        *)       : ;;
+    esac
+}
+
+act_system_update() {
+    if [[ "$PKG_MGR" == unknown ]]; then msg_warn "No se detectó gestor de paquetes."; return 0; fi
+    local logf="$STATE_DIR/updates.log" before n rc
+    mkdir -p "$STATE_DIR" 2>/dev/null; ( umask 077; touch "$logf" 2>/dev/null )
+
+    before=$(updates_list)
+    n=$(print -r -- "$before" | grep -c .)
+    msg_info "Actualizaciones pendientes: $n"
+    [[ -n "$before" ]] && print -r -- "$before" | head -n 15 | sed 's/^/     - /'
+    (( n > 15 )) && print "     ... y $(( n - 15 )) más"
+    confirm "¿Actualizar TODOS los paquetes con $PKG_MGR?" || { msg_info "Cancelado."; return 0; }
+
+    print -r -- "=== Actualización iniciada: $(date) ($PKG_MGR, $n pendientes) ===" >> "$logf"
+    # El estado se captura DENTRO de cada rama: al cerrar el 'case', pipestatus se pierde.
+    case "$PKG_MGR" in
+        apt)    { "${SUDO[@]}" apt-get update && "${SUDO[@]}" apt-get dist-upgrade -y; } 2>&1 | tee -a "$logf"; rc=${pipestatus[1]} ;;
+        dnf)    "${SUDO[@]}" dnf upgrade -y --refresh --nobest --skip-broken 2>&1 | tee -a "$logf"; rc=${pipestatus[1]} ;;
+        yum)    "${SUDO[@]}" yum upgrade -y 2>&1 | tee -a "$logf"; rc=${pipestatus[1]} ;;
+        pacman) "${SUDO[@]}" pacman -Syu --noconfirm 2>&1 | tee -a "$logf"; rc=${pipestatus[1]} ;;
+        zypper) { "${SUDO[@]}" zypper refresh && "${SUDO[@]}" zypper update -y; } 2>&1 | tee -a "$logf"; rc=${pipestatus[1]} ;;
+        apk)    { "${SUDO[@]}" apk update && "${SUDO[@]}" apk upgrade; } 2>&1 | tee -a "$logf"; rc=${pipestatus[1]} ;;
+    esac
+
+    print ""
+    if (( rc == 0 )); then
+        msg_ok "Actualización completada. Log: $logf"
+        if [[ "$PKG_MGR" == apt ]] && confirm "¿Limpiar dependencias que ya no se usan (autoremove)?"; then
+            "${SUDO[@]}" apt-get autoremove -y 2>&1 | tee -a "$logf"
+        fi
+    else
+        msg_err "La actualización falló (código $rc). Revisa el log: $logf"
+    fi
+    [[ -f /var/run/reboot-required ]] && msg_warn "El sistema requiere reinicio (reboot-required)."
+    log_action "Sistema: actualización con $PKG_MGR (rc=$rc, $n pendientes)"
+}
+
+# ==============================================================================
+#  MEMORIA Y SWAP   (reemplaza a swap.sh y swap-watch.sh)
+# ==============================================================================
+_swap_watch_loop() {
+    while true; do
+        clear
+        print -r -- "=== MONITOR RAM/SWAP - $(date +%T)   (Ctrl+C para volver) ==="
+        print "\n[MEMORIA GENERAL]"
+        free -h
+        print "\n[DETALLE SWAP (ZRAM vs DISCO)]"
+        swapon --show 2>/dev/null || print "(swapon no disponible)"
+        print "\n[TOP 5 PROCESOS QUE MÁS RAM USAN]"
+        ps -eo user:14,pmem,pcpu,comm --sort=-pmem 2>/dev/null | head -n 6
+        sleep 2
+    done
+}
+
+act_swap_watch() {
+    msg_info "Monitor de RAM/Swap (Ctrl+C para detener y volver al menú)..."
+    sleep 1
+    run_interruptible _swap_watch_loop
+}
+
+# Libera el swap (swapoff + swapon) SOLO si la RAM disponible puede absorberlo.
+act_swap_clear() {
+    mem_stats
+    local used=$(( SWAP_TOTAL - SWAP_FREE ))
+    if (( SWAP_TOTAL == 0 )); then msg_info "No hay swap configurado en este sistema."; return 0; fi
+    kv "Swap en uso" "$(human_bytes $used) de $(human_bytes $SWAP_TOTAL)"
+    kv "RAM disponible" "$(human_bytes $MEM_AVAIL)"
+    if (( used == 0 )); then msg_ok "El swap ya está en 0: no hay nada que liberar."; return 0; fi
+    if (( used * 100 > MEM_AVAIL * 80 )); then
+        msg_err "La RAM disponible no alcanza para absorber el swap en uso sin riesgo de OOM."
+        msg_info "Libera memoria (cierra procesos) y vuelve a intentar."
+        return 0
+    fi
+    msg_warn "swapoff mueve el swap de vuelta a la RAM; puede tardar y generar carga de disco."
+    confirm "¿Ejecutar 'swapoff -a && swapon -a'?" || { msg_info "Cancelado."; return 0; }
+    if "${SUDO[@]}" swapoff -a && "${SUDO[@]}" swapon -a; then
+        mem_stats
+        msg_ok "Swap reactivado. En uso ahora: $(human_bytes $(( SWAP_TOTAL - SWAP_FREE )))"
+        log_action "Swap: liberado (swapoff/swapon)"
+    else
+        msg_err "Falló swapoff/swapon. Revisa con 'swapon --show'."
+        "${SUDO[@]}" swapon -a 2>/dev/null
+    fi
+}
+
+# ==============================================================================
+#  DISCOS: INODOS
+# ==============================================================================
+act_inodes() {
+    msg_info "Uso de inodos (un disco puede estar 'lleno' por inodos aunque tenga espacio):"
+    printf " %-22s %10s %10s %10s %5s\n" "Montaje" "Inodos" "Usados" "Libres" "Uso"
+    df -iP -x tmpfs -x devtmpfs -x squashfs -x overlay 2>/dev/null | awk 'NR>1 {
+        u=$5; sub("%","",u); flag=""; if (u+0>=85) flag="  [!] casi agotados"
+        printf " %-22.22s %10s %10s %10s %5s%s\n", $6, $2, $3, $4, $5, flag
+    }'
+    log_action "Nativo: inodos"
+}
+
+# ==============================================================================
+#  SEGURIDAD DEL HOST
+# ==============================================================================
+act_selinux() {
+    if ! command -v getenforce &>/dev/null; then
+        msg_info "SELinux no está instalado en este sistema."
+        command -v aa-status &>/dev/null && { msg_info "AppArmor detectado:"; "${SUDO[@]}" aa-status 2>/dev/null | head -n 8; }
+        return 0
+    fi
+    kv "Modo actual" "$(getenforce)"
+    command -v sestatus &>/dev/null && sestatus 2>/dev/null | sed -n '1,8p;/Loaded policy/p' | sed 's/^/ /'
+    if command -v ausearch &>/dev/null; then
+        local out
+        out=$("${SUDO[@]}" ausearch -m avc -ts recent 2>/dev/null | tail -n 15)
+        print ""
+        if [[ -n "$out" ]]; then msg_warn "Denegaciones AVC recientes:"; print -r -- "$out"
+        else msg_ok "Sin denegaciones AVC recientes."; fi
+    else
+        msg_info "ausearch no instalado (paquete audit) para ver denegaciones."
+    fi
+    log_action "Seguridad: SELinux"
+}
+
+act_firewall() {
+    local found=0 st
+    if command -v firewall-cmd &>/dev/null; then
+        found=1
+        st=$("${SUDO[@]}" firewall-cmd --state 2>&1)
+        kv "firewalld" "$st"
+        if [[ "$st" == running ]]; then
+            "${SUDO[@]}" firewall-cmd --get-active-zones
+            print ""
+            "${SUDO[@]}" firewall-cmd --list-all
+        fi
+    fi
+    if command -v ufw &>/dev/null; then found=1; "${SUDO[@]}" ufw status verbose; fi
+    if (( ! found )) && command -v nft &>/dev/null; then
+        found=1; msg_info "nftables (primeras 40 líneas):"; "${SUDO[@]}" nft list ruleset 2>/dev/null | head -n 40
+    fi
+    (( found )) || msg_warn "No se detectó firewalld, ufw ni nftables."
+    log_action "Seguridad: firewall"
+}
+
+act_access() {
+    msg_info "Últimos accesos exitosos:"
+    last -n 10 2>/dev/null | sed 's/^/  /'
+    print ""
+    msg_info "Últimos intentos FALLIDOS (lastb):"
+    local out; out=$("${SUDO[@]}" lastb -n 10 2>/dev/null)
+    if [[ -n "$out" ]]; then print -r -- "$out" | sed 's/^/  /'; else print "  (ninguno o lastb no disponible)"; fi
+    print ""
+    msg_info "Sesiones abiertas ahora:"
+    who | sed 's/^/  /'
+    log_action "Seguridad: accesos"
+}
+
+act_privileged() {
+    msg_info "Usuarios con privilegios de administración:"
+    local g
+    for g in wheel sudo adm root; do
+        getent group "$g" &>/dev/null && print -r -- "  $g: $(getent group "$g" | cut -d: -f4)"
+    done
+    print ""
+    msg_info "Cuentas con UID 0 (deberías ver solo 'root'):"
+    awk -F: '$3==0{print "  " $1}' /etc/passwd
+    print ""
+    msg_info "Cuentas con shell de login y sin contraseña bloqueada:"
+    awk -F: '$7 !~ /(nologin|false)$/ {print "  " $1 " (" $7 ")"}' /etc/passwd | head -n 20
+    log_action "Seguridad: usuarios privilegiados"
+}
+
+act_chrony() {
+    if command -v chronyc &>/dev/null; then
+        msg_info "chronyc tracking:"; chronyc tracking 2>&1
+        print ""; msg_info "Fuentes de tiempo:"; chronyc sources 2>&1
+    fi
+    command -v timedatectl &>/dev/null && { print ""; msg_info "timedatectl:"; timedatectl 2>/dev/null; }
+    command -v chronyc &>/dev/null || command -v timedatectl &>/dev/null || msg_warn "Ni chronyc ni timedatectl disponibles."
+    log_action "Sistema: sincronización horaria"
+}
+
+# ==============================================================================
+#  MENÚ SYSADMIN
+# ==============================================================================
+menu_memory() {
+    run_menu "MEMORIA Y SWAP" \
+        "Monitor en vivo de RAM/Swap (Ctrl+C para volver)|act_swap_watch" \
+        "Liberar swap (swapoff/swapon con verificación de RAM)|act_swap_clear" \
+        "Recursos y procesos (top CPU/RAM, free)|act_resources"
+}
+
+menu_security() {
+    run_menu "SEGURIDAD DEL HOST" \
+        "SELinux / AppArmor: modo y denegaciones recientes|act_selinux" \
+        "Firewall (firewalld / ufw / nftables)|act_firewall" \
+        "Accesos: exitosos, fallidos y sesiones abiertas|act_access" \
+        "Usuarios privilegiados y cuentas UID 0|act_privileged"
+}
+
+menu_sysadmin() {
+    run_menu "SYSADMIN - ADMINISTRACIÓN DEL SERVIDOR" \
+        "#DIAGNÓSTICO Y ESTADO" \
         "Panorama general del servidor (Health Check)|act_health" \
-        "Herramientas nativas (Archivos, Servicios, Discos)|menu_native|nopause" \
-        "Monitoreo avanzado de recursos (btop, htop)|menu_monitor|nopause" \
-        "Gestión de bases de datos (BBDD)|menu_db|nopause" \
-        "Tareas programadas (cron/timers) y logs|menu_cron_logs|nopause"
+        "Memoria, swap y procesos|menu_memory|nopause" \
+        "Almacenamiento y particiones|act_storage" \
+        "Inodos (df -i)|act_inodes" \
+        "Sincronización horaria (chrony / timedatectl)|act_chrony" \
+        "Monitores interactivos (btop / htop)|menu_monitor|nopause" \
+        "#SISTEMA, SERVICIOS Y PAQUETES" \
+        "Actualizar paquetes del sistema (con log)|act_system_update" \
+        "Gestión de servicios (systemctl)|act_systemctl" \
+        "Logs de un servicio (journalctl)|act_journal" \
+        "Logs del sistema y tareas programadas (cron/timers)|menu_cron_logs|nopause" \
+        "#SEGURIDAD" \
+        "Seguridad del host (SELinux, firewall, accesos)|menu_security|nopause" \
+        "#ARCHIVOS Y DATOS" \
+        "Archivos: editar, buscar, comprimir, espacio, rsync|menu_files|nopause" \
+        "Bases de datos (listar, ejecutar SQL)|menu_db|nopause"
 }

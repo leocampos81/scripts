@@ -1,76 +1,60 @@
-#!/bin/bash
+#!/usr/bin/env zsh
+# ==============================================================================
+#  Módulo: BANNER  (reemplaza al antiguo banner.sh en bash)
+#  Cambios: nativo en zsh (se hace 'source', no se ejecuta como proceso), la
+#  información online (clima / IP pública) se CACHEA 10 minutos en vez de
+#  consultarse en cada redibujo del menú, y se puede desactivar con
+#  PROM_BANNER_ONLINE=0 (no se envía tu IP a terceros).
+# ==============================================================================
+[[ "$ZSH_EVAL_CONTEXT" == *:file* ]] || { print "Este archivo es un módulo de prom_claude.sh: no se ejecuta directamente."; exit 1; }
 
-######################################################################
-# 🌞 Welcome Banner & Dashboard Header                               #
-######################################################################
+BANNER_CACHE="$STATE_DIR/banner.cache"
+BANNER_TTL_MIN=10
+BANNER_WEATHER=""
+BANNER_PUBIP=""
 
-# Formatting variables
-COLOR_P='\033[1;36m'
-COLOR_S='\033[0;36m'
-RESET='\033[0m'
-
-# Print clean header with PROMETHERION2112
-function welcome_greeting () {
-  echo -e "$COLOR_P"
-  echo " =================================================================="
-  echo "   PROMETHERION2112 | SYSADMIN DASHBOARD"
-  echo " =================================================================="
-  echo -e "$RESET"
+banner_online_refresh() {
+    local w ip
+    w=$(curl -s -m 2 "https://wttr.in?format=%c+%C+%t,+%p+%w" 2>/dev/null)
+    ip=$(curl -s -m 2 "https://ipinfo.io/ip" 2>/dev/null)
+    mkdir -p "$STATE_DIR" 2>/dev/null
+    ( umask 077; print -r -- "${w:-N/D}"$'\n'"${ip:-N/D}" > "$BANNER_CACHE" )
 }
 
-# Print system information with neofetch, if it's installed
-function welcome_sysinfo () {
-  if hash neofetch 2>/dev/null; then
-    neofetch --shell_version off \
-      --disable kernel distro shell resolution de wm wm_theme theme icons term packages \
-      --backend off \
-      --colors 4 8 4 4 8 6 \
-      --color_blocks off \
-      --memory_display info
-  fi
+# Rellena BANNER_WEATHER / BANNER_PUBIP desde caché (refresca si venció)
+banner_online_info() {
+    BANNER_WEATHER=""; BANNER_PUBIP=""
+    [[ "${PROM_BANNER_ONLINE:-1}" == 0 ]] && return 1
+    command -v curl &>/dev/null || return 1
+    local age=999999 mt
+    if [[ -f "$BANNER_CACHE" ]]; then
+        mt=$(stat -c %Y "$BANNER_CACHE" 2>/dev/null || print 0)
+        age=$(( ( $(date +%s) - mt ) / 60 ))
+    fi
+    (( age >= BANNER_TTL_MIN )) && banner_online_refresh
+    BANNER_WEATHER=$(sed -n 1p "$BANNER_CACHE" 2>/dev/null)
+    BANNER_PUBIP=$(sed -n 2p "$BANNER_CACHE" 2>/dev/null)
+    return 0
 }
 
-# Print todays info: Date, IP, weather, etc
-function welcome_today () {
-  timeout=0.5
-  echo -e "\033[1;34mToday\n------"
-
-  # Print last login in the format: "Last Login: Day Month Date HH:MM on tty"
-  last_login=$(last | grep "^$USER " | head -1 | awk '{print "⏲️  Ultima Conexion: "$4" "$5" "$6" "$7" on "$2}')
-  echo -e "${COLOR_S}${last_login}"
-
-  # Print date time
-  echo -e "$COLOR_S$(date '+🗓️  Fecha: %A, %B %d, %Y at %H:%M')"
-
-  # Print local weather
-  curl -s -m $timeout "https://wttr.in?format=%cWeather:+%C+%t,+%p+%w"
-  echo -e "${RESET}"
-
-  # Print IP address
-  if hash ip 2>/dev/null; then
-    ip_address=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
-    ip_interface=$(ip route get 8.8.8.8 | awk -F"dev " 'NR==1{split($2,a," ");print a[1]}')
-    echo -e "${COLOR_S}🌐 IP: $(curl -s -m $timeout 'https://ipinfo.io/ip') (${ip_address} on ${ip_interface})"
-    echo -e "${RESET}\n"
-  fi
+banner_main() {
+    print "╔══════════════════════════════════════════════════════════════════╗"
+    print "║                                                                  ║"
+    print "║                  P R O M E T H E R I O N  2 1 1 2                ║"
+    print "║                 S Y S A D M I N   D A S H B O A R D              ║"
+    print "║                                                                  ║"
+    print "╚══════════════════════════════════════════════════════════════════╝"
+    local ll lip
+    print -r -- "[*] Usuario Activo : ${USER:-$(id -un)}@$HOST"
+    print -r -- "[*] Servidor actual: $OS_NAME"
+    print -r -- "[*] Gestor paquetes: $PKG_MGR   |   Script: v$VERSION"
+    print -r -- "[*] Fecha          : $(date '+%A, %d de %B de %Y, %H:%M')"
+    ll=$(last -n 1 "${USER:-$(id -un)}" 2>/dev/null | awk 'NR==1 && $1!="wtmp" && NF>3 {print $4" "$5" "$6" "$7" en "$2}')
+    [[ -n "$ll" ]] && print -r -- "[*] Última conexión: $ll"
+    lip=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
+    [[ -n "$lip" ]] && print -r -- "[*] IP local        : $lip"
+    if banner_online_info; then
+        [[ -n "$BANNER_PUBIP" && "$BANNER_PUBIP" != "N/D" ]] && print -r -- "[*] IP pública      : $BANNER_PUBIP"
+        [[ -n "$BANNER_WEATHER" && "$BANNER_WEATHER" != "N/D" ]] && print -r -- "[*] Clima            : $BANNER_WEATHER"
+    fi
 }
-
-# Putting it all together
-function welcome() {
-  welcome_greeting
-  welcome_sysinfo
-  welcome_today
-}
-
-# Determine if file is being run directly or sourced
-([[ -n $ZSH_EVAL_CONTEXT && $ZSH_EVAL_CONTEXT =~ :file$ ]] ||  
-  [[ -n $KSH_VERSION && $(cd "$(dirname -- "$0")" &&
-    printf '%s' "${PWD%/}/")$(basename -- "$0") != "${.sh.file}" ]] ||  
-  [[ -n $BASH_VERSION ]] && (return 0 2>/dev/null)) && sourced=1 || sourced=0
-
-# If script being called directly run immediately
-if [ $sourced -eq 0 ]; then
-  welcome $@
-fi
-
-# EOF
