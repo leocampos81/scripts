@@ -10,7 +10,10 @@
 #    ./prom_claude.sh              Menú interactivo
 #    ./prom_claude.sh sysadmin     Entra directo al menú Sysadmin
 #    ./prom_claude.sh devops       Entra directo al menú DevOps
+#    ./prom_claude.sh secops       Entra directo al menú DevSecOps
+#    ./prom_claude.sh console      Consola DevOps: comandos reales con contexto y guardarraíles
 #    ./prom_claude.sh health       Health Check sin menú (SSH / cron)
+#    ./prom_claude.sh health-csv   Health Check en CSV (stdout o archivo; --excel)
 #    ./prom_claude.sh metrics      Métricas formato Prometheus (textfile collector)
 #    ./prom_claude.sh selftest     Verifica módulos, menús y dependencias
 #    ./prom_claude.sh version | help
@@ -33,12 +36,19 @@ export LC_NUMERIC=C
 # ZLE (edición de línea). DEBE inicializarse aquí, a nivel superior: dentro de
 # una función el backspace ^H no queda enlazado. Con ZLE, ^H y DEL (0x7f)
 # funcionan sin depender de 'stty erase'.
+# Ctrl+D: en una línea vacía significa "fin de entrada" (sale del menú/consola).
+# Sin esto zsh lo interpreta como autocompletado ("¿ver las 1444 posibilidades?").
+_PROM_EOF=0
+_prom_eof_widget() { if [[ -z "$BUFFER" ]]; then _PROM_EOF=1; zle accept-line; else zle delete-char; fi }
 if [[ -t 0 && -t 1 ]]; then
-    zmodload zsh/zle 2>/dev/null && bindkey -e 2>/dev/null     # (no hace falta 'setopt zle' en scripts)
+    if zmodload zsh/zle 2>/dev/null; then      # (no hace falta 'setopt zle' en scripts)
+        bindkey -e 2>/dev/null
+        zle -N _prom_eof_widget 2>/dev/null && bindkey '^D' _prom_eof_widget 2>/dev/null
+    fi
 fi
 
 # --- Rutas y variables globales ------------------------------------------------
-VERSION="6.0"
+VERSION="6.1"
 SCRIPT_NAME="${0:t}"
 SCRIPT_DIR="${0:A:h}"          # a nivel superior (dentro de una función $0 es el nombre de la función)
 SCRIPT_PATH="${0:A}"
@@ -58,7 +68,7 @@ PICKED=""
 OS_NAME=""
 PKG_MGR="unknown"
 typeset -a LOADED_MODULES LOAD_ERRORS
-MODULES=(banner sysadmin files network data git iac docker devops utils)
+MODULES=(banner sysadmin files network data git iac docker secops console devops utils)
 
 # Carpeta base para descubrir proyectos (Ansible / Terraform / Compose)
 AUTO_BASE="${PROM_AUTOMATION_DIR:-$HOME}"
@@ -175,6 +185,7 @@ prompt_input() {
         typeset -g -- "$var_name="          # vared necesita que la variable exista
         vared -p "$prompt_msg" "$var_name"
         rc=$?
+        if (( _PROM_EOF )); then _PROM_EOF=0; typeset -g -- "$var_name="; return 1; fi   # Ctrl+D en vacío
     else
         print -rn -- "$prompt_msg"
         read -r "$var_name"
@@ -448,6 +459,8 @@ menu_main() {
         "SYSADMIN: servidor, servicios, seguridad, archivos, BBDD|menu_sysadmin|nopause" \
         "RED: diagnóstico, DNS, SSL, puertos, Nmap|menu_network|nopause" \
         "DEVOPS: Git, Ansible, Terraform, Docker|menu_devops|nopause" \
+        "DEVSECOPS: secretos, IaC, imágenes, SSH, parches|menu_secops|nopause" \
+        "CONSOLA: comandos reales con contexto y guardarraíles|console_start|nopause" \
         "UTILIDADES: clima, claves, QR, conversores, divisas|menu_utils|nopause"
 }
 
@@ -505,7 +518,8 @@ selftest() {
     done
     section "HERRAMIENTAS OPCIONALES"
     for c in jq git docker ansible terraform tofu nmap rsync btop htop dig whois traceroute nc \
-             qrencode mysql psql sqlcmd fuser lsof firewall-cmd getenforce chronyc; do
+             qrencode mysql psql sqlcmd fuser lsof firewall-cmd getenforce chronyc \
+             trivy gitleaks checkov tfsec hadolint ansible-lint yamllint kubectl; do
         if command -v "$c" &>/dev/null || { [[ "$c" == sqlcmd ]] && find_sqlcmd &>/dev/null; }; then
             print -r -- " ${C_GRN}[ OK ]${C_RST} $c"
         else
@@ -527,8 +541,11 @@ Uso:
   $SCRIPT_NAME sysadmin    Entra directo al menú Sysadmin
   $SCRIPT_NAME network     Entra directo al menú Red
   $SCRIPT_NAME devops      Entra directo al menú DevOps
+  $SCRIPT_NAME secops      Entra directo al menú DevSecOps
+  $SCRIPT_NAME console     Consola DevOps (comandos reales con contexto)
   $SCRIPT_NAME utils       Entra directo al menú Utilidades
   $SCRIPT_NAME health      Health Check sin menú (SSH / cron)
+  $SCRIPT_NAME health-csv [--excel] [archivo]   Health Check en CSV (stdout si no hay archivo; con archivo agrega filas)
   $SCRIPT_NAME metrics     Métricas formato Prometheus (textfile collector)
   $SCRIPT_NAME selftest    Verifica módulos, menús y dependencias
   $SCRIPT_NAME version     Muestra la versión
@@ -539,6 +556,7 @@ Variables de entorno:
   PROM_MODULE_DIR       Carpeta de módulos     (default: <script>/modules)
   PROM_AUTOMATION_DIR   Base para buscar proyectos Ansible/Terraform/Compose (default: \$HOME)
   PROM_BANNER_ONLINE=0  Desactiva clima/IP pública en el banner
+  PROM_CONSOLE_ALLOW    Herramientas extra permitidas en la consola (ej: "k9s kustomize")
   NO_COLOR=1            Desactiva colores
 
 Log de acciones: $LOG_FILE
@@ -572,11 +590,18 @@ main() {
             menu_main
             print "¡Hasta luego, Leonardo! Cerrando dashboard."
             ;;
-        sysadmin|devops|network|utils)
+        sysadmin|devops|network|utils|secops)
             _interactive_setup || return 1
             if (( ! ${+functions[menu_$1]} )); then msg_err "El menú '$1' no está disponible (módulo no cargado)."; return 1; fi
             "menu_$1"
             ;;
+        console)
+            _interactive_setup || return 1
+            (( ${+functions[console_start]} )) || { msg_err "Falta el módulo console."; return 1; }
+            console_start ;;
+        health-csv)
+            (( ${+functions[health_csv_cli]} )) || { msg_err "Falta el módulo sysadmin."; return 1; }
+            shift; health_csv_cli "$@" ;;
         health)
             (( ${+functions[health_check]} )) || { msg_err "Falta el módulo sysadmin."; return 1; }
             init_log; health_check ;;

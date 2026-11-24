@@ -30,6 +30,8 @@ devops_panel() {
 menu_devops() {
     MENU_HOOK=devops_panel
     run_menu "DEVOPS - CÓDIGO, INFRAESTRUCTURA Y CONTENEDORES" \
+        "#CONSOLA" \
+        "Consola DevOps: comandos reales con contexto y guardarraíles|console_start|nopause" \
         "#CONTROL DE VERSIONES" \
         "Git multi-remoto: estado, pull, push, ramas|menu_git|nopause" \
         "#INFRAESTRUCTURA COMO CÓDIGO" \

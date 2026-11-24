@@ -628,6 +628,167 @@ act_chrony() {
     log_action "Sistema: sincronización horaria"
 }
 
+
+# ==============================================================================
+#  EXPORTAR EL HEALTH CHECK A CSV
+#  Formato "largo" (una fila por métrica): timestamp,host,categoria,metrica,valor,unidad,estado
+#  Pensado para acumular series de tiempo (cron) y abrirse en Excel/Sheets/pandas.
+# ==============================================================================
+CSV_SEP=","
+CSV_TS=""
+
+csv_q() {
+    local v="$1"
+    if [[ "$v" == *\"* || "$v" == *$'\n'* || "$v" == *"$CSV_SEP"* ]]; then
+        v="${v//\"/\"\"}"; print -rn -- "\"$v\""
+    else
+        print -rn -- "$v"
+    fi
+}
+
+# csv_row categoria metrica valor unidad estado
+csv_row() {
+    local s="$CSV_SEP"
+    print -r -- "$CSV_TS$s$(csv_q "$HOST")$s$(csv_q "$1")$s$(csv_q "$2")$s$(csv_q "$3")$s$(csv_q "$4")$s$(csv_q "$5")"
+}
+
+health_csv_header() {
+    local s="$CSV_SEP"
+    print -r -- "timestamp${s}host${s}categoria${s}metrica${s}valor${s}unidad${s}estado"
+}
+
+health_csv_rows() {
+    CSV_TS=$(date '+%Y-%m-%dT%H:%M:%S%z')
+    local cores up_s cpu l1 l5 l15 rest st used pct upd failed ports total zomb iface ip4 gw svc sid mnt tot usd av name
+    cores=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null); cores="${cores:-1}"
+    cpu=$(lscpu 2>/dev/null | awk -F: '/^Model name/{gsub(/^[ \t]+/,"",$2); print $2; exit}')
+
+    csv_row sistema os "$OS_NAME" texto INFO
+    csv_row sistema kernel "$(uname -r)" texto INFO
+    csv_row sistema arquitectura "$(uname -m)" texto INFO
+    up_s=$(awk '{printf "%d",$1}' /proc/uptime 2>/dev/null)
+    csv_row sistema uptime "${up_s:-0}" segundos INFO
+    csv_row cpu modelo "${cpu:-N/D}" texto INFO
+    csv_row cpu nucleos "$cores" unidades INFO
+
+    read -r l1 l5 l15 rest < /proc/loadavg 2>/dev/null
+    st=OK; awk -v l="${l1:-0}" -v c="$cores" 'BEGIN{exit !(l>c)}' && st=ALERTA
+    csv_row carga load_1m "${l1:-0}" ratio "$st"
+    csv_row carga load_5m "${l5:-0}" ratio INFO
+    csv_row carga load_15m "${l15:-0}" ratio INFO
+
+    mem_stats
+    used=$(( MEM_TOTAL - MEM_AVAIL )); pct=0; (( MEM_TOTAL > 0 )) && pct=$(( used * 100 / MEM_TOTAL ))
+    csv_row memoria ram_total "$MEM_TOTAL" bytes INFO
+    csv_row memoria ram_usada "$used" bytes INFO
+    st=OK; (( pct >= 90 )) && st=ALERTA
+    csv_row memoria ram_usada_pct "$pct" porcentaje "$st"
+    csv_row memoria swap_total "$SWAP_TOTAL" bytes INFO
+    st=OK; (( SWAP_TOTAL - SWAP_FREE > 0 )) && st=ALERTA
+    csv_row memoria swap_usada "$(( SWAP_TOTAL - SWAP_FREE ))" bytes "$st"
+
+    df -PB1 -x tmpfs -x devtmpfs -x squashfs -x overlay 2>/dev/null | awk 'NR>1{u=$5; sub("%","",u); print $6"\t"$2"\t"$3"\t"$4"\t"u}' \
+    | while IFS=$'\t' read -r mnt tot usd av pct; do
+        st=OK; (( pct >= 85 )) && st=ALERTA
+        csv_row disco "usado_pct:$mnt" "$pct" porcentaje "$st"
+        csv_row disco "total:$mnt" "$tot" bytes INFO
+        csv_row disco "libre:$mnt" "$av" bytes INFO
+    done
+    df -iP -x tmpfs -x devtmpfs -x squashfs -x overlay 2>/dev/null | awk 'NR>1{u=$5; sub("%","",u); if (u ~ /^[0-9]+$/) print $6"\t"u}' \
+    | while IFS=$'\t' read -r mnt pct; do
+        st=OK; (( pct >= 85 )) && st=ALERTA
+        csv_row inodos "usado_pct:$mnt" "$pct" porcentaje "$st"
+    done
+
+    upd=$(updates_pending)
+    csv_row paquetes actualizaciones_pendientes "$upd" paquetes INFO
+    csv_row paquetes reinicio_requerido "$([[ -f /var/run/reboot-required ]] && print si || print no)" booleano INFO
+
+    if have_systemd; then
+        failed=$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}')
+        st=OK; [[ -n "$failed" ]] && st=ALERTA
+        csv_row servicios unidades_fallidas "$(print -r -- "$failed" | grep -c .)" unidades "$st"
+        for name in ${(f)failed}; do csv_row servicios unidad_fallida "$name" texto ALERTA; done
+        local -A seen
+        for svc in ssh sshd docker containerd cron crond systemd-resolved firewalld ufw NetworkManager systemd-networkd \
+                   chronyd systemd-timesyncd auditd rsyslog fail2ban nginx apache2 httpd mariadb mysql postgresql \
+                   mssql-server mongod redis redis-server; do
+            systemctl is-active --quiet "$svc" 2>/dev/null || continue
+            sid=$(systemctl show -p Id --value "$svc" 2>/dev/null); sid="${sid:-$svc}"
+            (( ${+seen[$sid]} )) && continue
+            seen[$sid]=1; csv_row servicios "activo:${sid%.service}" activo texto OK
+        done
+    fi
+
+    total=$(ps -eo pid= 2>/dev/null | wc -l | tr -d ' ')
+    zomb=$(ps -eo stat= 2>/dev/null | grep -c '^Z')
+    csv_row procesos total "${total:-0}" unidades INFO
+    st=OK; (( zomb > 0 )) && st=ALERTA
+    csv_row procesos zombies "${zomb:-0}" unidades "$st"
+
+    if command -v ip &>/dev/null; then
+        iface=$(ip route show default 2>/dev/null | awk '/default/{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+        gw=$(ip route show default 2>/dev/null | awk '/default/{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+        [[ -n "$iface" ]] && ip4=$(ip -4 -o addr show dev "$iface" 2>/dev/null | awk '{print $4; exit}')
+        csv_row red interfaz_principal "${iface:-N/A}" texto INFO
+        csv_row red ip_local "${ip4:-N/A}" texto INFO
+        csv_row red gateway "${gw:-N/A}" texto INFO
+        ports=$(ss -tuln 2>/dev/null | awk 'NR>1' | wc -l | tr -d ' ')
+        csv_row red sockets_en_escucha "${ports:-0}" unidades INFO
+    fi
+
+    for name in ${(f)"$(detect_db_engines | sed -nE 's/^ \[ OK \] ([^(]+[^( ]).*/\1/p')"}; do
+        csv_row bases_de_datos motor_detectado "$name" texto INFO
+    done
+}
+
+# Escribe el CSV en un archivo (agrega filas si ya existe). $2 = 1 para formato Excel (; + BOM)
+health_csv_write() {
+    local file="$1" excel="${2:-0}" new=1
+    mkdir -p "${file:h}" 2>/dev/null || { msg_err "No pude crear '${file:h}'."; return 1; }
+    if [[ -s "$file" ]]; then
+        new=0
+        head -n 1 "$file" | grep -q ';' && CSV_SEP=";" || CSV_SEP=","      # respeta el separador del archivo
+    else
+        CSV_SEP=","; (( excel )) && CSV_SEP=";"
+    fi
+    if (( new )); then
+        (( excel )) && printf '\xEF\xBB\xBF' > "$file"
+        health_csv_header >> "$file"
+    fi
+    health_csv_rows >> "$file"
+    msg_ok "CSV $( (( new )) && print creado || print actualizado ): $file ($(grep -c . "$file") líneas, separador '$CSV_SEP')"
+    log_action "Health: exportado a CSV $file"
+}
+
+# Menú: exportación interactiva
+act_health_csv() {
+    local mode f def="$HOME/prom_exports/health_${HOST}_$(date +%Y%m%d_%H%M%S).csv"
+    print " 1) Coma ',' (estándar: Google Sheets, pandas, Grafana)"
+    print " 2) Punto y coma ';' + UTF-8 con BOM (Excel en español)"
+    prompt_input "Elige [1-2, Default 1]: " mode
+    prompt_input "Archivo [Default: $def]: " f
+    f="${f:-$def}"
+    msg_info "Recolectando métricas..."
+    health_csv_write "$f" "$([[ "$mode" == 2 ]] && print 1 || print 0)"
+    [[ -f "$f" ]] && { print ""; msg_info "Primeras filas:"; head -n 6 "$f" | sed 's/^\xEF\xBB\xBF//' | cut -c1-120 | sed 's/^/   /'; }
+}
+
+# CLI: ./prom_claude.sh health-csv [--excel] [archivo]
+#      sin archivo -> stdout; con archivo -> crea o agrega filas (ideal para cron)
+health_csv_cli() {
+    local excel=0 file=""
+    while (( $# )); do
+        case "$1" in --excel) excel=1 ;; *) file="$1" ;; esac; shift
+    done
+    if [[ -n "$file" ]]; then
+        health_csv_write "$file" "$excel" >/dev/null && print -r -- "OK: $file"
+    else
+        CSV_SEP=","; (( excel )) && CSV_SEP=";"
+        health_csv_header; health_csv_rows
+    fi
+}
+
 # ==============================================================================
 #  MENÚ SYSADMIN
 # ==============================================================================
@@ -650,6 +811,7 @@ menu_sysadmin() {
     run_menu "SYSADMIN - ADMINISTRACIÓN DEL SERVIDOR" \
         "#DIAGNÓSTICO Y ESTADO" \
         "Panorama general del servidor (Health Check)|act_health" \
+        "Exportar el Health Check a CSV (Excel / Sheets)|act_health_csv" \
         "Memoria, swap y procesos|menu_memory|nopause" \
         "Almacenamiento y particiones|act_storage" \
         "Inodos (df -i)|act_inodes" \
