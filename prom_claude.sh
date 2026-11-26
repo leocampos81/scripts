@@ -68,7 +68,7 @@ PICKED=""
 OS_NAME=""
 PKG_MGR="unknown"
 typeset -a LOADED_MODULES LOAD_ERRORS
-MODULES=(banner sysadmin files network data git iac docker secops console devops utils)
+MODULES=(banner sysadmin files network data git iac docker secops console devops utils fail2ban monitoring users)
 
 # Carpeta base para descubrir proyectos (Ansible / Terraform / Compose)
 AUTO_BASE="${PROM_AUTOMATION_DIR:-$HOME}"

@@ -809,7 +809,7 @@ menu_security() {
 
 menu_sysadmin() {
     run_menu "SYSADMIN - ADMINISTRACIÓN DEL SERVIDOR" \
-        "#DIAGNÓSTICO Y ESTADO" \
+        "#DIAGNOSTICO Y ESTADO" \
         "Panorama general del servidor (Health Check)|act_health" \
         "Exportar el Health Check a CSV (Excel / Sheets)|act_health_csv" \
         "Memoria, swap y procesos|menu_memory|nopause" \
@@ -822,9 +822,13 @@ menu_sysadmin() {
         "Gestión de servicios (systemctl)|act_systemctl" \
         "Logs de un servicio (journalctl)|act_journal" \
         "Logs del sistema y tareas programadas (cron/timers)|menu_cron_logs|nopause" \
+        "Monitoreo (Prometheus, Grafana, Loki, etc.)|menu_monitoring|nopause" \
         "#SEGURIDAD" \
         "Seguridad del host (SELinux, firewall, accesos)|menu_security|nopause" \
+        "Fail2ban (gestión de baneos)|menu_fail2ban|nopause" \
         "#ARCHIVOS Y DATOS" \
         "Archivos: editar, buscar, comprimir, espacio, rsync|menu_files|nopause" \
-        "Bases de datos (listar, ejecutar SQL)|menu_db|nopause"
+        "Bases de datos (listar, ejecutar SQL)|menu_db|nopause" \
+        "#USUARIOS Y GRUPOS" \
+        "Gestión de usuarios y grupos|menu_users|nopause"
 }
