@@ -281,6 +281,110 @@ na_speed() {
     log_action "RedAv: speedtest Cloudflare"
 }
 
+# --- Calculadora de Redes (IP + CIDR) ---
+net_calc() {
+    clear
+    msg_info "Calculadora de Subredes (IPv4)"
+    print -r -- "----------------------------------------------------------"
+    
+    local input
+    prompt_input "Ingresa la IP con CIDR (ej: 192.168.1.10/24): " input
+    [[ -z "$input" ]] && return 0
+
+    if ! [[ "$input" =~ '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$' ]]; then
+        msg_err "Formato no válido. Debe ser IP/CIDR (ej: 192.168.1.1/24)."
+        return 0
+    fi
+
+    local ip="${input%/*}"
+    local cidr="${input#*/}"
+
+    if (( cidr < 0 || cidr > 32 )); then
+        msg_err "El CIDR debe estar entre 0 y 32."
+        return 0
+    fi
+
+    local result
+    result=$(awk -v ip="$ip" -v cidr="$cidr" '
+    BEGIN {
+        split(ip, o, ".")
+        for (i=1; i<=4; i++) {
+            if (o[i] < 0 || o[i] > 255) { print "ERROR"; exit 1 }
+        }
+
+        # Calcular máscara (usando int para forzar enteros)
+        mask = 0
+        for (i=0; i<cidr; i++) mask += 2^(31-i)
+        m1 = int(mask / 16777216) % 256
+        m2 = int(mask / 65536) % 256
+        m3 = int(mask / 256) % 256
+        m4 = mask % 256
+        mask_str = m1 "." m2 "." m3 "." m4
+
+        # Wildcard
+        w1 = int(255 - m1); w2 = int(255 - m2); w3 = int(255 - m3); w4 = int(255 - m4)
+        wildcard_str = w1 "." w2 "." w3 "." w4
+
+        # Dirección de red (usando int() para que no haya decimales)
+        net1 = int(o[1] AND m1); net2 = int(o[2] AND m2); net3 = int(o[3] AND m3); net4 = int(o[4] AND m4)
+        net_str = net1 "." net2 "." net3 "." net4
+
+        # Broadcast
+        bc1 = int(net1 OR w1); bc2 = int(net2 OR w2); bc3 = int(net3 OR w3); bc4 = int(net4 OR w4)
+        bc_str = bc1 "." bc2 "." bc3 "." bc4
+
+        # Primer host
+        fh1 = net1; fh2 = net2; fh3 = net3; fh4 = int(net4 + 1)
+        if (fh4 > 255) { fh4 = 0; fh3 = int(fh3 + 1) }
+        first_host_str = fh1 "." fh2 "." fh3 "." fh4
+
+        # Último host
+        lh1 = bc1; lh2 = bc2; lh3 = bc3; lh4 = int(bc4 - 1)
+        if (lh4 < 0) { lh4 = 255; lh3 = int(lh3 - 1) }
+        last_host_str = lh1 "." lh2 "." lh3 "." lh4
+
+        # Total hosts
+        num_hosts = int(2^(32-cidr) - 2)
+        if (cidr >= 31) num_hosts = 0
+
+        # Clase
+        first_octet = int(o[1])
+        if (first_octet < 128) class = "A"
+        else if (first_octet < 192) class = "B"
+        else if (first_octet < 224) class = "C"
+        else if (first_octet < 240) class = "D (Multicast)"
+        else class = "E (Experimental)"
+
+        print ip "|" cidr "|" class "|" mask_str "|" wildcard_str "|" net_str "|" bc_str "|" first_host_str "|" last_host_str "|" num_hosts
+    }')
+
+    if [[ "$result" == "ERROR" ]]; then
+        msg_err "Uno de los octetos de la IP es inválido (debe estar entre 0 y 255)."
+        return 0
+    fi
+
+    local r_ip r_cidr r_class r_mask r_wild r_net r_bc r_fh r_lh r_num
+    IFS='|' read -r r_ip r_cidr r_class r_mask r_wild r_net r_bc r_fh r_lh r_num <<< "$result"
+
+    print ""
+    box_open "CALCULADORA DE RED"
+    box_row "IP de entrada" "${r_ip}/${r_cidr}"
+    box_row "Clase" "$r_class"
+    box_sep
+    box_row "Máscara de red" "$r_mask"
+    box_row "Wildcard" "$r_wild"
+    box_sep
+    box_row "Dirección de Red" "$r_net"
+    box_row "Broadcast" "$r_bc"
+    box_row "Primer Host" "$r_fh"
+    box_row "Último Host" "$r_lh"
+    box_sep
+    box_row "Total Hosts" "$r_num"
+    box_close
+    
+    print ""
+}
+
 menu_netadv() {
     run_menu "DIAGNÓSTICO Y PRUEBAS DE RED AVANZADAS" \
         "#CONECTIVIDAD Y RESOLUCIÓN" \
@@ -305,6 +409,8 @@ menu_network() {
         "Red básica e interfaces (ip, rutas, puertos en escucha)|act_net_basic" \
         "#DIAGNÓSTICO" \
         "Diagnóstico avanzado: HTTP, ping, puertos, DNS, SSL, WHOIS|menu_netadv|nopause" \
-        "#SEGURIDAD" \
+        "#HERRAMIENTAS DE RED" \
+        "Calculadora de Redes (IP/CIDR)|net_calc" \
+	"#SEGURIDAD" \
         "Auditoría de red (Nmap)|menu_nmap|nopause"
 }
